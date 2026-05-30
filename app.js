@@ -29,6 +29,7 @@ let calEventsYear     = null; // null = still loading
 let proposedEvents    = [];
 let selectedProposals = new Set();
 let currentView       = 'week';
+let currentDayDate    = new Date(); // date shown in day view
 
 // ── INIT ───────────────────────────────────────────────────
 window.onload = () => {
@@ -98,8 +99,28 @@ function loadSavedToken() {
 
 function onAuthSuccess() {
   setCalStatus(true, 'calendar connected');
+  fetchCalendarName();
   fetchEvents7();
   fetchEventsYear();
+}
+
+async function fetchCalendarName() {
+  if (!gapiToken) return;
+  try {
+    const res  = await fetch(`${CAL_API}/calendars/primary`, {
+      headers: { Authorization: `Bearer ${gapiToken}` }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    // summary is usually the full name, e.g. "Swaraag Sistla"
+    const name = data.summary || data.id || '';
+    if (name) {
+      const first = name.split(' ')[0];
+      document.querySelectorAll('.wordmark').forEach(el => {
+        el.textContent = `${first}'s Schedule`;
+      });
+    }
+  } catch { /* silently fail, keep default */ }
 }
 
 function initGoogleAuth() {
@@ -169,8 +190,14 @@ async function fetchEventsYear() {
 }
 
 // ── VIEW SWITCHER ──────────────────────────────────────────
-function switchCalView(view) {
+function goToToday() {
+  currentDayDate = new Date();
+  switchCalView(currentView === 'day' ? 'day' : currentView);
+}
+
+function switchCalView(view, date) {
   currentView = view;
+  if (date) currentDayDate = new Date(date);
   ['day','week','month','year'].forEach(v => {
     document.getElementById(`pill-${v}`).classList.toggle('active', v === view);
     document.getElementById(`cal-${v}-view`).classList.toggle('hidden', v !== view);
@@ -189,15 +216,22 @@ function renderCurrentView() {
 
 // ── DAY VIEW ───────────────────────────────────────────────
 function renderDayView() {
-  const el    = document.getElementById('cal-day-view');
-  const today = new Date(); today.setHours(0,0,0,0);
-  const dayStr = today.toISOString().slice(0,10);
+  const el      = document.getElementById('cal-day-view');
+  const target  = new Date(currentDayDate); target.setHours(0,0,0,0);
+  const today   = new Date(); today.setHours(0,0,0,0);
+  const isToday = target.toDateString() === today.toDateString();
+  const dayStr  = target.toISOString().slice(0,10);
 
-  const events = calEvents7.filter(e => (e.start.dateTime || e.start.date || '').slice(0,10) === dayStr);
+  // Use year events if available (covers dates outside 7-day window), else 7-day
+  const pool   = calEventsYear || calEvents7;
+  const events = pool.filter(e => (e.start.dateTime || e.start.date || '').slice(0,10) === dayStr);
   const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  const label = `${DAY_NAMES[target.getDay()]}, ${MONTH_ABBR[target.getMonth()]} ${target.getDate()}`;
 
   el.innerHTML = buildTimeGrid(
-    [{ date: today, label: DAY_NAMES[today.getDay()], events, isToday: true }],
+    [{ date: target, label, events, isToday }],
     'single'
   );
   scrollToNow(el);
@@ -227,11 +261,14 @@ function buildTimeGrid(cols, mode) {
   const colCount   = cols.length;
   const gridCols   = `44px repeat(${colCount}, 1fr)`;
 
-  const headerCells = cols.map(c => `
-    <div class="tg-day-label ${c.isToday ? 'today' : ''}">
+  const headerCells = cols.map(c => {
+    const ds = c.date.toISOString().slice(0,10);
+    return `<div class="tg-day-label ${c.isToday ? 'today' : ''} clickable"
+      onclick="switchCalView('day','${ds}')" title="View ${c.label}">
       ${c.label}
       <span class="day-num">${c.date.getDate()}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   const timeLabels = Array.from({ length: totalHours }, (_, i) => {
     const h = WEEK_START_HOUR + i;
@@ -241,7 +278,7 @@ function buildTimeGrid(cols, mode) {
   const dayCols = cols.map(c => {
     const dayStr = c.date.toISOString().slice(0,10);
     const blocks = (c.events || []).map(e => eventBlock(e, false)).join('');
-    const proposed = (c.proposed || []).map(e => proposedBlock(e)).join('');
+    const proposed = (c.proposed || []).map((e, pi) => proposedBlock(e, e._idx !== undefined ? e._idx : pi)).join('');
     const now = new Date();
     const nowLine = c.isToday
       ? `<div class="now-line" style="top:${(now.getHours() + now.getMinutes()/60 - WEEK_START_HOUR) * HOUR_PX}px"></div>`
@@ -275,16 +312,25 @@ function eventBlock(ev, isProposed) {
   </div>`;
 }
 
-function proposedBlock(ev) {
+function proposedBlock(ev, idx) {
   const start  = new Date(ev.start);
   const end    = new Date(ev.end);
   const startH = start.getHours() + start.getMinutes() / 60;
   const endH   = end.getHours()   + end.getMinutes()   / 60;
   const top    = Math.max(0, startH - WEEK_START_HOUR) * HOUR_PX;
   const height = Math.max(18, (endH - startH) * HOUR_PX);
-  const data   = encodeURIComponent(JSON.stringify({ title: ev.title, start: ev.start, end: ev.end, desc: ev.description || '', loc: '' }));
-  return `<div class="tg-event proposed" style="top:${top}px;height:${height}px" onclick="showEventPopup(event,'${data}')">
+  const state  = ev._state || 'pending'; // pending | accepted | rejected
+  if (state === 'rejected') return '';   // hide rejected blocks from calendar
+  const stateClass = state === 'accepted' ? 'proposed-accepted' : 'proposed-pending';
+  const minHeight  = height >= 48;       // only show buttons if block is tall enough
+  const btns = minHeight ? `
+    <div class="prop-block-actions">
+      <button class="prop-block-btn accept" onclick="event.stopPropagation();acceptProposal(${idx})" title="Accept">✓</button>
+      <button class="prop-block-btn reject" onclick="event.stopPropagation();rejectProposal(${idx})" title="Reject">✗</button>
+    </div>` : '';
+  return `<div class="tg-event proposed ${stateClass}" style="top:${top}px;height:${height}px" id="prop-block-${idx}">
     <div class="tg-event-title">${ev.title}</div>
+    ${btns}
   </div>`;
 }
 
@@ -333,7 +379,7 @@ function renderMonthView(extra = []) {
       `<span class="month-pill proposed">${e.title}</span>`
     ).join('');
     const overflow = c.events.length > 3 ? `<div class="month-overflow">+${c.events.length-3} more</div>` : '';
-    return `<div class="month-cell ${c.isToday?'today':''}" onclick="switchCalView('day')">
+    return `<div class="month-cell ${c.isToday?'today':''}" onclick="switchCalView('day','${c.dateStr}')">
       <div class="month-cell-num">${c.d}</div>
       ${pills}${propPills}${overflow}
     </div>`;
@@ -387,7 +433,7 @@ function renderYearView() {
       const isToday = today.getFullYear() === year && today.getMonth() === mi && today.getDate() === d;
       cells.push(`<div class="year-day has-events-${level} ${isToday?'today':''}" title="${count} event${count!==1?'s':''}"></div>`);
     }
-    return `<div class="year-month" onclick="switchCalView('month')">
+    return `<div class="year-month" onclick="switchCalView('month')" title="View ${name}">
       <div class="year-month-name">${name}</div>
       <div class="year-month-grid">${cells.join('')}</div>
     </div>`;
@@ -455,6 +501,10 @@ function closeEventPopup() {
   document.getElementById('event-popup').classList.add('hidden');
   document.getElementById('popup-overlay').classList.add('hidden');
 }
+
+// Close popup when user scrolls anything
+window.addEventListener('scroll', closeEventPopup, { passive: true });
+document.addEventListener('scroll', closeEventPopup, { capture: true, passive: true });
 
 // ── VOICE INPUT ────────────────────────────────────────────
 function toggleRecording() {
@@ -550,14 +600,19 @@ Your job:
 2. Find FREE slots that don't conflict with existing events.
 3. Use reasonable durations if not specified (gym=1hr, homework=1-2hr, etc).
 4. Schedule at sensible times (gym=morning/evening, study=afternoon/evening, etc).
+5. Extract any additional details mentioned: location, reminders, notes, color.
 
 Respond ONLY with a valid JSON array. No prose, no markdown, no code fences.
 
-Each object must have exactly:
-- "title":       string  (short event name)
-- "start":       string  (ISO 8601, e.g. "2025-06-02T09:00:00")
-- "end":         string  (ISO 8601)
-- "description": string  (1 sentence explaining why this slot)`;
+Each object must have exactly these fields (use null for ones not mentioned):
+- "title":          string   (short event name)
+- "start":          string   (ISO 8601, e.g. "2025-06-02T09:00:00")
+- "end":            string   (ISO 8601)
+- "description":    string   (1 sentence explaining why this slot was chosen)
+- "location":       string|null  (address or place name if mentioned)
+- "notes":          string|null  (any extra context the user mentioned)
+- "reminderMins":   number|null  (minutes before event for reminder, e.g. 30)
+- "color":          string|null  (one of: "tomato","flamingo","tangerine","banana","sage","basil","peacock","blueberry","lavender","grape","graphite" — pick one that fits the event type, or null)`;
 }
 
 async function scheduleFromText(text) {
@@ -609,65 +664,191 @@ async function callClaude(messages) {
 
 // ── PROPOSALS ──────────────────────────────────────────────
 function renderProposals() {
-  selectedProposals = new Set(proposedEvents.map((_, i) => i));
-  const list = document.getElementById('proposals-list');
-  const toLocal = iso => iso ? iso.slice(0,16) : '';
+  proposedEvents.forEach((ev, i) => {
+    ev._idx = i;
+    if (!ev._state) ev._state = 'pending';
+  });
 
-  list.innerHTML = proposedEvents.map((ev, i) => `
-    <div class="event-card selected" id="card-${i}">
-      <div class="event-check" id="check-${i}" onclick="toggleProposal(${i})"></div>
+  const list = document.getElementById('proposals-list');
+
+  // Split ISO into date and time parts
+  const toDate = iso => iso ? iso.slice(0,10) : '';
+  const toTime = iso => iso && iso.includes('T') ? iso.slice(11,16) : '';
+
+  // Color options for select
+  const COLOR_OPTIONS = [
+    ['','None'],
+    ['tomato','🔴 Tomato'],
+    ['flamingo','🌸 Flamingo'],
+    ['tangerine','🟠 Tangerine'],
+    ['banana','🟡 Banana'],
+    ['sage','🌿 Sage'],
+    ['basil','🌲 Basil'],
+    ['peacock','🔵 Peacock'],
+    ['blueberry','🫐 Blueberry'],
+    ['lavender','💜 Lavender'],
+    ['grape','🍇 Grape'],
+    ['graphite','⬛ Graphite'],
+  ];
+
+  list.innerHTML = proposedEvents.map((ev, i) => {
+    const state       = ev._state || 'pending';
+    const colorOpts   = COLOR_OPTIONS.map(([v,l]) =>
+      `<option value="${v}" ${ev.color===v?'selected':''>${l}</option>`).join('');
+
+    // Determine which extra fields Claude filled
+    const hasExtras = ev.location || ev.notes || ev.reminderMins || ev.color;
+
+    return `
+    <div class="event-card ${state}" id="card-${i}">
+      <div class="event-card-actions">
+        <button class="card-action-btn accept ${state==='accepted'?'active':''}"
+          onclick="acceptProposal(${i})" title="Accept">✓</button>
+        <button class="card-action-btn reject ${state==='rejected'?'active':''}"
+          onclick="rejectProposal(${i})" title="Reject">✗</button>
+      </div>
       <div class="event-info">
+
         <input class="event-title-input" type="text" value="${ev.title}"
           onchange="updateProposal(${i},'title',this.value)" />
-        <div class="event-time-row">
-          <span class="event-time-label">from</span>
-          <input class="event-datetime-input" type="datetime-local" value="${toLocal(ev.start)}"
-            onchange="updateProposal(${i},'start',this.value+':00')" />
-          <span class="event-sep">→</span>
-          <input class="event-datetime-input" type="datetime-local" value="${toLocal(ev.end)}"
-            onchange="updateProposal(${i},'end',this.value+':00')" />
+
+        <div class="event-dt-group">
+          <span class="event-dt-label">from</span>
+          <input class="event-date-input" type="date" value="${toDate(ev.start)}"
+            onchange="updateProposalDT(${i},'start','date',this.value)" />
+          <input class="event-time-input" type="time" value="${toTime(ev.start)}"
+            onchange="updateProposalDT(${i},'start','time',this.value)" />
+          <span class="event-dt-sep">→</span>
+          <input class="event-date-input" type="date" value="${toDate(ev.end)}"
+            onchange="updateProposalDT(${i},'end','date',this.value)" />
+          <input class="event-time-input" type="time" value="${toTime(ev.end)}"
+            onchange="updateProposalDT(${i},'end','time',this.value)" />
         </div>
+
         ${ev.description ? `<div class="event-desc">${ev.description}</div>` : ''}
+
+        <button class="extra-fields-toggle ${hasExtras?'open':''}" id="extras-toggle-${i}"
+          onclick="toggleExtras(${i})">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+          ${hasExtras ? 'Details added' : 'Add details'}
+        </button>
+
+        <div class="extra-fields ${hasExtras?'open':''}" id="extras-${i}">
+          <div class="extra-field-row">
+            <span class="extra-field-label">Location</span>
+            <input class="extra-field-input" type="text" placeholder="e.g. ELH 100 or Gym"
+              value="${ev.location||''}"
+              onchange="updateProposal(${i},'location',this.value)" />
+          </div>
+          <div class="extra-field-row">
+            <span class="extra-field-label">Notes</span>
+            <input class="extra-field-input" type="text" placeholder="Any extra context"
+              value="${ev.notes||''}"
+              onchange="updateProposal(${i},'notes',this.value)" />
+          </div>
+          <div class="extra-field-row">
+            <span class="extra-field-label">Reminder</span>
+            <div class="reminder-row">
+              <input class="extra-field-input" type="number" placeholder="30" min="0"
+                value="${ev.reminderMins!=null?ev.reminderMins:''}"
+                onchange="updateProposal(${i},'reminderMins',this.value?parseInt(this.value):null)" />
+              <span style="font-size:12px;color:var(--muted)">minutes before</span>
+            </div>
+          </div>
+          <div class="extra-field-row">
+            <span class="extra-field-label">Color</span>
+            <select class="extra-field-select"
+              onchange="updateProposal(${i},'color',this.value)">
+              ${colorOpts}
+            </select>
+          </div>
+        </div>
+
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   document.getElementById('proposals-section').classList.add('visible');
-  if (currentView === 'week') renderWeekView(proposedEvents);
-  if (currentView === 'month') renderMonthView(proposedEvents);
+  document.getElementById('revise-area').classList.add('hidden');
+  _refreshCalWithProposals();
 }
 
+function toggleExtras(i) {
+  const toggle = document.getElementById(`extras-toggle-${i}`);
+  const panel  = document.getElementById(`extras-${i}`);
+  toggle.classList.toggle('open');
+  panel.classList.toggle('open');
+  toggle.childNodes[2].textContent = panel.classList.contains('open') ? ' Collapse' : ' Add details';
+}
+
+// Handle split date + time inputs
+function updateProposalDT(i, field, part, value) {
+  const current = proposedEvents[i][field] || '';
+  const date    = current.slice(0,10);
+  const time    = current.slice(11,16) || '00:00';
+  if (part === 'date') proposedEvents[i][field] = `${value}T${time}:00`;
+  else                  proposedEvents[i][field] = `${date}T${value}:00`;
+  _refreshCalWithProposals();
+}
+
+function acceptProposal(i) {
+  proposedEvents[i]._state = proposedEvents[i]._state === 'accepted' ? 'pending' : 'accepted';
+  renderProposals();
+}
+
+function rejectProposal(i) {
+  proposedEvents[i]._state = proposedEvents[i]._state === 'rejected' ? 'pending' : 'rejected';
+  renderProposals();
+}
+
+function _refreshCalWithProposals() {
+  const visible = proposedEvents.filter(e => e._state !== 'rejected');
+  if (currentView === 'week')  renderWeekView(visible);
+  if (currentView === 'month') renderMonthView(visible);
+}
+
+// legacy toggle kept for compatibility — not used in new UI
 function toggleProposal(i) {
-  if (selectedProposals.has(i)) selectedProposals.delete(i);
-  else selectedProposals.add(i);
-  document.getElementById('card-' + i).classList.toggle('selected', selectedProposals.has(i));
+  proposedEvents[i]._state = proposedEvents[i]._state === 'rejected' ? 'pending' : 'rejected';
+  renderProposals();
 }
 
 function updateProposal(i, field, value) {
   proposedEvents[i][field] = value;
-  if (currentView === 'week')  renderWeekView(proposedEvents);
-  if (currentView === 'month') renderMonthView(proposedEvents);
+  _refreshCalWithProposals();
 }
 
 // ── CALENDAR WRITE ─────────────────────────────────────────
 async function confirmEvents() {
-  const toAdd = proposedEvents.filter((_, i) => selectedProposals.has(i));
-  if (toAdd.length === 0) { showToast('Nothing selected', 'error'); return; }
+  // Accept all pending as a convenience (already accepted ones included too)
+  const toAdd = proposedEvents.filter(e => e._state !== 'rejected');
+  if (toAdd.length === 0) { showToast('Nothing to add — reject fewer events', 'error'); return; }
   setLoading(true, `adding ${toAdd.length} event${toAdd.length>1?'s':''}...`);
   document.getElementById('proposals-section').classList.remove('visible');
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   let added = 0;
   for (const ev of toAdd) {
     try {
+      const gcalBody = {
+        summary:     ev.title,
+        description: [ev.description, ev.notes].filter(Boolean).join('\n'),
+        location:    ev.location || '',
+        start:       { dateTime: ev.start, timeZone: tz },
+        end:         { dateTime: ev.end,   timeZone: tz },
+        reminders:   ev.reminderMins != null
+          ? { useDefault: false, overrides: [{ method: 'popup', minutes: ev.reminderMins }] }
+          : { useDefault: true },
+      };
+      // Google Calendar color IDs
+      const COLOR_MAP = { tomato:'11',flamingo:'4',tangerine:'6',banana:'5',sage:'2',basil:'10',peacock:'7',blueberry:'9',lavender:'1',grape:'3',graphite:'8' };
+      if (ev.color && COLOR_MAP[ev.color]) gcalBody.colorId = COLOR_MAP[ev.color];
+
       const res = await fetch(`${CAL_API}/calendars/primary/events`, {
         method:  'POST',
         headers: { Authorization: `Bearer ${gapiToken}`, 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          summary:     ev.title,
-          description: ev.description || '',
-          start:       { dateTime: ev.start, timeZone: tz },
-          end:         { dateTime: ev.end,   timeZone: tz },
-          reminders:   { useDefault: true },
-        }),
+        body:    JSON.stringify(gcalBody),
       });
       if (!res.ok) throw new Error(await res.text());
       added++;
@@ -677,6 +858,35 @@ async function confirmEvents() {
   await fetchEvents7();
   resetUI();
   showToast(`${added} event${added>1?'s':''} added to Google Calendar ✓`, 'success');
+}
+
+
+// ── REVISE ─────────────────────────────────────────────────
+function toggleRevise() {
+  const area = document.getElementById('revise-area');
+  area.classList.toggle('hidden');
+  if (!area.classList.contains('hidden')) {
+    document.getElementById('revise-input').focus();
+  }
+}
+
+async function handleRevise() {
+  const revision = document.getElementById('revise-input').value.trim();
+  if (!revision) { showError('Describe what you want to change.'); return; }
+
+  // Build context from current proposals
+  const currentProposals = proposedEvents.map(e =>
+    `- "${e.title}" from ${e.start} to ${e.end}`
+  ).join('\n');
+
+  const messages = [{
+    role: 'user',
+    content: `I previously asked you to schedule some things and you proposed:\n${currentProposals}\n\nI want to make the following changes: ${revision}`,
+  }];
+
+  document.getElementById('revise-input').value = '';
+  proposedEvents = [];
+  await callClaude(messages);
 }
 
 // ── UI HELPERS ─────────────────────────────────────────────
@@ -696,8 +906,13 @@ function setCalStatus(ok, msg) {
 }
 
 function setLoading(show, text = '') {
-  document.getElementById('loading-state').className = show ? 'visible' : '';
-  if (text) document.getElementById('loading-text').textContent = text;
+  const overlay = document.getElementById('cal-loading-overlay');
+  if (show) {
+    overlay.classList.remove('hidden');
+    if (text) document.getElementById('cal-loading-text').textContent = text;
+  } else {
+    overlay.classList.add('hidden');
+  }
 }
 
 function showError(msg) {

@@ -7,7 +7,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <script>
-    // Run before render to prevent flash of setup screen
     (function() {
       const cfg = localStorage.getItem('scheduler_config');
       if (cfg) document.documentElement.setAttribute('data-authed', '1');
@@ -71,17 +70,18 @@
       </div>
     </div>
 
-    <!-- Calendar view pill switcher -->
+    <!-- Calendar pill switcher -->
     <div class="cal-pill-row">
       <div class="cal-pills">
         <button class="cal-pill" id="pill-day"   onclick="switchCalView('day')">Day</button>
-        <button class="cal-pill active" id="pill-week"  onclick="switchCalView('week')">Week</button>
+        <button class="cal-pill active" id="pill-week" onclick="switchCalView('week')">Week</button>
         <button class="cal-pill" id="pill-month" onclick="switchCalView('month')">Month</button>
         <button class="cal-pill" id="pill-year"  onclick="switchCalView('year')">Year</button>
       </div>
+      <button class="today-btn" onclick="goToToday()">Today</button>
     </div>
 
-    <!-- Calendar views -->
+    <!-- Calendar container with overlay -->
     <div id="cal-container">
       <div id="cal-day-view"   class="cal-view hidden"></div>
       <div id="cal-week-view"  class="cal-view"></div>
@@ -93,9 +93,17 @@
         </div>
         <div id="year-grid" class="hidden"></div>
       </div>
+
+      <!-- Loading overlay — sits on top of the calendar -->
+      <div id="cal-loading-overlay" class="cal-loading-overlay hidden">
+        <div class="cal-loading-inner">
+          <div class="spinner-lg"></div>
+          <span id="cal-loading-text">thinking...</span>
+        </div>
+      </div>
     </div>
 
-    <!-- Central mic button between calendar and input -->
+    <!-- Central mic button -->
     <div class="mic-center-zone">
       <button class="mic-center-btn" id="mic-btn" onclick="toggleRecording()">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -110,24 +118,16 @@
 
     <!-- Input area -->
     <div class="input-area">
-      <!-- Image preview strip (shown when image attached) -->
       <div class="image-strip hidden" id="image-strip">
         <div class="image-thumb-wrap">
           <img id="image-thumb" src="" alt="" />
           <button class="image-remove-btn" onclick="clearImage()">×</button>
         </div>
       </div>
-
-      <!-- Transcript / text box -->
       <div class="textarea-wrap">
-        <textarea
-          id="main-input"
-          placeholder="What do you need to schedule? Speak or type..."
-          rows="3"
-        ></textarea>
+        <textarea id="main-input" placeholder="What do you need to schedule? Speak or type..." rows="3"></textarea>
         <div class="textarea-actions">
           <div class="textarea-left">
-            <!-- Image attach button -->
             <button class="action-icon-btn" onclick="document.getElementById('image-file-input').click()" title="Attach image">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -148,19 +148,21 @@
     <!-- Error -->
     <div class="error-box" id="error-box"></div>
 
-    <!-- Loading -->
-    <div id="loading-state">
-      <div class="spinner"></div>
-      <span id="loading-text">thinking...</span>
-    </div>
-
     <!-- Proposals -->
     <div id="proposals-section">
       <div class="proposals-header">// proposed changes</div>
       <div id="proposals-list"></div>
+
+      <!-- Revise input (hidden until Revise clicked) -->
+      <div id="revise-area" class="revise-area hidden">
+        <textarea id="revise-input" placeholder="What would you like to change? e.g. 'move the gym to evening' or 'add a reminder 30 min before'" rows="2"></textarea>
+        <button class="btn btn-primary" style="margin-top:8px" onclick="handleRevise()">Re-propose →</button>
+      </div>
+
       <div class="confirm-row">
-        <button class="btn btn-confirm" onclick="confirmEvents()">Add to Calendar ✓</button>
-        <button class="btn btn-ghost"   onclick="resetUI()">Cancel</button>
+        <button class="btn btn-confirm"    onclick="confirmEvents()">Confirm All →</button>
+        <button class="btn btn-revise"     onclick="toggleRevise()">Revise</button>
+        <button class="btn btn-ghost"      onclick="resetUI()">Discard</button>
       </div>
     </div>
 
@@ -170,10 +172,10 @@
 <!-- Event detail popup -->
 <div id="event-popup" class="event-popup hidden">
   <button class="popup-close" onclick="closeEventPopup()">×</button>
-  <div class="popup-title"  id="popup-title"></div>
-  <div class="popup-time"   id="popup-time"></div>
-  <div class="popup-desc"   id="popup-desc"></div>
-  <div class="popup-loc"    id="popup-loc"></div>
+  <div class="popup-title" id="popup-title"></div>
+  <div class="popup-time"  id="popup-time"></div>
+  <div class="popup-desc"  id="popup-desc"></div>
+  <div class="popup-loc"   id="popup-loc"></div>
 </div>
 <div id="popup-overlay" class="popup-overlay hidden" onclick="closeEventPopup()"></div>
 
@@ -185,14 +187,14 @@
     <div id="reset-confirm-area" class="hidden">
       <p class="modal-warn">This will clear your Google Client ID and Anthropic API key. You'll need to re-enter them.</p>
       <div class="modal-btns">
-        <button class="btn btn-red" onclick="resetConfig()">Yes, reset everything</button>
+        <button class="btn btn-red"   onclick="resetConfig()">Yes, reset everything</button>
         <button class="btn btn-ghost" onclick="closeSettings()">Cancel</button>
       </div>
     </div>
     <div id="reset-initial-area">
       <div class="modal-btns">
         <button class="btn btn-red-outline" onclick="showResetConfirm()">Reset credentials</button>
-        <button class="btn btn-ghost" onclick="closeSettings()">Close</button>
+        <button class="btn btn-ghost"       onclick="closeSettings()">Close</button>
       </div>
     </div>
   </div>
