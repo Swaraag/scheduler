@@ -83,7 +83,7 @@ function saveToken(token) {
   gapiToken = token;
   localStorage.setItem('scheduler_token', JSON.stringify({
     token,
-    expiry: Date.now() + 55 * 60 * 1000, // 55 min (tokens last 1hr, expire early for safety)
+    expiry: Date.now() + 50 * 60 * 1000,
   }));
 }
 
@@ -92,12 +92,14 @@ function loadSavedToken() {
     const saved = localStorage.getItem('scheduler_token');
     if (!saved) return false;
     const { token, expiry } = JSON.parse(saved);
-    if (Date.now() < expiry) { gapiToken = token; return true; }
-  } catch {}
+    if (Date.now() < expiry && token) { gapiToken = token; return true; }
+    localStorage.removeItem('scheduler_token');
+  } catch { localStorage.removeItem('scheduler_token'); }
   return false;
 }
 
 function onAuthSuccess() {
+  setCalOverlay(false);
   setCalStatus(true, 'calendar connected');
   fetchCalendarName();
   fetchEvents7();
@@ -112,7 +114,6 @@ async function fetchCalendarName() {
     });
     if (!res.ok) return;
     const data = await res.json();
-    // summary is usually the full name, e.g. "Swaraag Sistla"
     const name = data.summary || data.id || '';
     if (name) {
       const first = name.split(' ')[0];
@@ -120,40 +121,99 @@ async function fetchCalendarName() {
         el.textContent = `${first}'s Schedule`;
       });
     }
-  } catch { /* silently fail, keep default */ }
+  } catch {}
 }
 
 function initGoogleAuth() {
+  // Show connecting overlay right away — DOM is ready by the time showApp() calls this
+  setCalOverlay(true, 'Connecting to Google Calendar...');
+
   const loadGIS = (onload) => {
-    const s = document.createElement('script');
-    s.src   = 'https://accounts.google.com/gsi/client';
+    // If GIS already loaded (e.g. background reload), call immediately
+    if (window.google?.accounts?.oauth2) { onload(); return; }
+    const s  = document.createElement('script');
+    s.src    = 'https://accounts.google.com/gsi/client';
     s.onload = onload;
+    s.onerror = () => {
+      setCalOverlay(true, 'Failed to load Google auth', true);
+      setCalStatus(false, 'network error');
+    };
     document.head.appendChild(s);
   };
 
-  const makeTokenClient = () => google.accounts.oauth2.initTokenClient({
-    client_id: config.clientId,
-    scope:     GOOGLE_SCOPES,
-    callback:  (resp) => {
-      if (resp.error) { setCalStatus(false, 'auth failed'); return; }
+  const authCallback = (resp) => {
+    if (!resp.error) {
       saveToken(resp.access_token);
       onAuthSuccess();
-    },
+      return;
+    }
+    // Silent auth failed — try with explicit consent prompt (opens popup)
+    if (resp.error === 'access_denied') {
+      setCalOverlay(true, 'Access denied — check Google Cloud test users', true);
+      setCalStatus(false, 'access denied');
+    } else {
+      // e.g. "interaction_required" — need user to click
+      setCalOverlay(true, 'Tap to sign in with Google', false, true);
+    }
+  };
+
+  const makeTC = () => google.accounts.oauth2.initTokenClient({
+    client_id: config.clientId,
+    scope:     GOOGLE_SCOPES,
+    callback:  authCallback,
   });
 
-  // If a valid cached token exists, use it immediately — no popup
   if (loadSavedToken()) {
+    // Fast path: cached token valid, skip auth entirely
     onAuthSuccess();
-    // Load GIS silently in background so re-auth works when token eventually expires
-    loadGIS(() => { window._tokenClient = makeTokenClient(); });
+    loadGIS(() => { window._tokenClient = makeTC(); });
     return;
   }
 
-  // No valid token — load GIS and trigger auth
   loadGIS(() => {
-    window._tokenClient = makeTokenClient();
+    window._tokenClient = makeTC();
+    // Try silent first (no popup); callback handles failures
     window._tokenClient.requestAccessToken({ prompt: '' });
   });
+}
+
+// ── CAL OVERLAY (connecting + loading) ────────────────────
+// Single overlay used for both "connecting" and "Claude thinking" states
+function setCalOverlay(show, text = '', showRetry = false, showSignIn = false) {
+  const overlay = document.getElementById('cal-loading-overlay');
+  const textEl  = document.getElementById('cal-loading-text');
+  const inner   = overlay.querySelector('.cal-loading-inner');
+
+  if (!show) {
+    if (!overlay.dataset.claudeLoading) overlay.classList.add('hidden');
+    return;
+  }
+
+  overlay.classList.remove('hidden');
+  if (text) textEl.textContent = text;
+
+  // Clear old action buttons
+  inner.querySelectorAll('.overlay-action-btn').forEach(b => b.remove());
+
+  if (showRetry) {
+    const btn = document.createElement('button');
+    btn.className   = 'overlay-action-btn retry-btn';
+    btn.textContent = 'Retry';
+    btn.onclick     = () => location.reload();
+    inner.appendChild(btn);
+  }
+
+  if (showSignIn) {
+    const btn = document.createElement('button');
+    btn.className   = 'overlay-action-btn retry-btn';
+    btn.textContent = 'Sign in with Google';
+    btn.onclick     = () => {
+      inner.querySelectorAll('.overlay-action-btn').forEach(b => b.remove());
+      textEl.textContent = 'Waiting for Google sign-in...';
+      window._tokenClient.requestAccessToken({ prompt: 'consent' });
+    };
+    inner.appendChild(btn);
+  }
 }
 
 // ── CALENDAR FETCH ─────────────────────────────────────────
@@ -908,10 +968,13 @@ function setCalStatus(ok, msg) {
 function setLoading(show, text = '') {
   const overlay = document.getElementById('cal-loading-overlay');
   if (show) {
-    overlay.classList.remove('hidden');
-    if (text) document.getElementById('cal-loading-text').textContent = text;
+    overlay.dataset.claudeLoading = '1';
+    // Clear any auth-state action buttons before showing Claude loading
+    overlay.querySelectorAll('.overlay-action-btn').forEach(b => b.remove());
+    setCalOverlay(true, text);
   } else {
-    overlay.classList.add('hidden');
+    delete overlay.dataset.claudeLoading;
+    setCalOverlay(false);
   }
 }
 
