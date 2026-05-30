@@ -214,7 +214,7 @@ function attachGridInteractions(gridBody) {
       if (!encoded) return;
       const data = JSON.parse(decodeURIComponent(encoded));
       _renderPopup(data, r.right, r.top, true);
-    }, 700);
+    }, 300);
   });
 
   gridBody.addEventListener('mouseout', (e) => {
