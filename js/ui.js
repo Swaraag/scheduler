@@ -228,7 +228,7 @@ function clearImage() {
 function handlePropose() {
   const text = document.getElementById('main-input').value.trim();
   if (!text && !uploadedImage) { showError('Say or type what you want to schedule.'); return; }
-  if (!gapiToken) { window._tokenClient.requestAccessToken({ prompt: 'consent' }); return; }
+  if (!gapiToken) { window._tokenClient?.requestAccessToken({ prompt: 'consent' }); return; }
   if (isRecording) stopRecording();
   uploadedImage ? scheduleFromImage(text) : scheduleFromText(text);
 }
@@ -267,11 +267,7 @@ function setCalOverlay(show, text = '', showRetry = false, showSignIn = false) {
   if (showSignIn) {
     const btn = document.createElement('button');
     btn.className = 'overlay-action-btn retry-btn'; btn.textContent = 'Sign in with Google';
-    btn.onclick = () => {
-      inner.querySelectorAll('.overlay-action-btn').forEach(b => b.remove());
-      textEl.textContent = 'Waiting for Google sign-in...';
-      window._tokenClient.requestAccessToken({ prompt: 'consent' });
-    };
+    btn.onclick = () => window._tokenClient?.requestAccessToken({ prompt: 'consent' });
     inner.appendChild(btn);
   }
 }

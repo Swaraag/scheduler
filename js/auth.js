@@ -1,9 +1,6 @@
 // Google auth, calendar list, and event fetching — all "talking to Google"
 
 // ── AUTH-AWARE FETCH ───────────────────────────────────────
-// Wraps fetch with automatic token-expiry recovery.
-// On a 401 it attempts one silent re-auth then retries the request.
-// If re-auth fails or the second attempt also 401s, shows the sign-in overlay.
 async function apiFetch(url, options = {}) {
   const doFetch = () => fetch(url, {
     ...options,
@@ -13,7 +10,6 @@ async function apiFetch(url, options = {}) {
   let res = await doFetch();
   if (res.status !== 401) return res;
 
-  // Token expired — attempt silent refresh
   const refreshed = await _silentRefresh();
   if (!refreshed) {
     setCalOverlay(true, 'Session expired — sign in again', false, true);
@@ -21,7 +17,6 @@ async function apiFetch(url, options = {}) {
     throw new Error('Session expired');
   }
 
-  // Retry once with the new token
   res = await doFetch();
   if (res.status === 401) {
     setCalOverlay(true, 'Session expired — sign in again', false, true);
@@ -34,7 +29,6 @@ async function apiFetch(url, options = {}) {
 function _silentRefresh() {
   return new Promise(resolve => {
     if (!window.google?.accounts?.oauth2 || !config.clientId) { resolve(false); return; }
-    // Create a throw-away token client so we never mutate the shared _tokenClient.callback
     const tc = google.accounts.oauth2.initTokenClient({
       client_id: config.clientId,
       scope:     GOOGLE_SCOPES,
@@ -48,6 +42,7 @@ function _silentRefresh() {
   });
 }
 
+// ── TOKEN STORAGE ──────────────────────────────────────────
 function saveToken(token) {
   gapiToken = token;
   localStorage.setItem('scheduler_token', JSON.stringify({
@@ -66,34 +61,48 @@ function loadSavedToken() {
   return false;
 }
 
+// ── AUTH SUCCESS ───────────────────────────────────────────
 function onAuthSuccess() {
   setCalOverlay(false);
   setCalStatus(true, 'calendar connected');
   fetchCalendarList().then(() => { fetchEvents7(); fetchEventsYear(); });
 }
 
+// ── INIT ───────────────────────────────────────────────────
 function initGoogleAuth() {
   const loadGIS = (onload) => {
     if (window.google?.accounts?.oauth2) { onload(); return; }
     const s = document.createElement('script');
     s.src = 'https://accounts.google.com/gsi/client';
     s.onload = onload;
-    s.onerror = () => { setCalOverlay(true, 'Failed to load Google auth', true); setCalStatus(false, 'network error'); };
+    s.onerror = () => {
+      setCalOverlay(true, 'Failed to load Google auth', true);
+      setCalStatus(false, 'network error');
+    };
     document.head.appendChild(s);
   };
 
   const authCallback = (resp) => {
-    if (!resp.error) { saveToken(resp.access_token); onAuthSuccess(); return; }
+    if (!resp.error) {
+      saveToken(resp.access_token);
+      onAuthSuccess();
+      return;
+    }
     if (resp.error === 'access_denied') {
       setCalOverlay(true, 'Access denied — check Google Cloud test users', true);
       setCalStatus(false, 'access denied');
     } else {
-      setCalOverlay(true, 'Tap to sign in with Google', false, true);
+      // Covers interaction_required, popup_blocked, etc. — show a tap-to-sign-in button
+      // that triggers from a real user gesture (works on Safari iOS)
+      setCalOverlay(true, 'Tap to connect Google Calendar', false, true);
+      setCalStatus(false, 'sign in required');
     }
   };
 
   const makeTC = () => google.accounts.oauth2.initTokenClient({
-    client_id: config.clientId, scope: GOOGLE_SCOPES, callback: authCallback,
+    client_id: config.clientId,
+    scope:     GOOGLE_SCOPES,
+    callback:  authCallback,
   });
 
   if (loadSavedToken()) {
@@ -105,10 +114,13 @@ function initGoogleAuth() {
   requestAnimationFrame(() => setCalOverlay(true, 'Connecting to Google Calendar...'));
   loadGIS(() => {
     window._tokenClient = makeTC();
+    // Try silent first — works on desktop/Android; on Safari iOS this will fail
+    // gracefully and authCallback will show the "Tap to sign in" button instead
     window._tokenClient.requestAccessToken({ prompt: '' });
   });
 }
 
+// ── CALENDAR LIST ──────────────────────────────────────────
 async function fetchCalendarList() {
   if (!gapiToken) return;
   try {
@@ -135,6 +147,7 @@ async function fetchCalendarList() {
   } catch {}
 }
 
+// ── EVENT FETCHING ─────────────────────────────────────────
 function _calIds() {
   const ids = allCalendars.filter(c => enabledCalendars.has(c.id)).map(c => c.id);
   if (ids.length === 0) {
