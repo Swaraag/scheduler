@@ -10,33 +10,27 @@
 <body>
 
 <div class="container">
-  <header>
-    <div class="wordmark">Scheduler</div>
-    <h1>Plan your day<br/>with your <span>voice.</span></h1>
-    <p class="subtitle">// powered by claude + google calendar</p>
-  </header>
 
   <!-- ── SETUP SCREEN ── -->
   <div id="setup-screen">
+    <header>
+      <div class="wordmark">Scheduler</div>
+      <h1>Plan your day<br/>with your <span>voice.</span></h1>
+      <p class="subtitle">// powered by claude + google calendar</p>
+    </header>
     <div class="setup-card">
       <h2>One-time setup</h2>
       <div class="step">
         <div class="step-num">1</div>
-        <div class="step-text">
-          Go to <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a>, create a new project, and enable the <strong>Google Calendar API</strong>.
-        </div>
+        <div class="step-text">Go to <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a>, create a project, and enable the <strong>Google Calendar API</strong>.</div>
       </div>
       <div class="step">
         <div class="step-num">2</div>
-        <div class="step-text">
-          Go to <strong>APIs &amp; Services → Credentials → Create Credentials → OAuth client ID</strong>. Choose <code>Web application</code>. Add your site URL under "Authorized JavaScript origins". Copy the Client ID.
-        </div>
+        <div class="step-text">Go to <strong>APIs &amp; Services → Credentials → Create Credentials → OAuth client ID</strong>. Choose <code>Web application</code>. Add your site URL under "Authorized JavaScript origins". Copy the Client ID.</div>
       </div>
       <div class="step">
         <div class="step-num">3</div>
-        <div class="step-text">
-          Get your Anthropic API key from <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>.
-        </div>
+        <div class="step-text">Get your Anthropic API key from <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>.</div>
       </div>
       <div class="input-group">
         <span class="input-label">Google OAuth Client ID</span>
@@ -53,101 +47,95 @@
   <!-- ── MAIN APP SCREEN ── -->
   <div id="app-screen">
 
-    <!-- Status bar -->
-    <div class="status-bar">
-      <span>
-        <span class="status-dot" id="cal-dot"></span>
-        <span id="cal-status">connecting...</span>
-      </span>
-      <button class="btn btn-ghost btn-sm" onclick="resetConfig()">Reset</button>
-    </div>
-
-    <!-- Calendar view toggle -->
-    <div class="cal-view-toggle">
-      <button class="cal-toggle-btn active" id="toggle-list" onclick="switchCalView('list')">List</button>
-      <button class="cal-toggle-btn" id="toggle-week" onclick="switchCalView('week')">Week</button>
-    </div>
-
-    <!-- List view -->
-    <div id="cal-list-view" class="calendar-preview">
-      <div class="cal-header">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="4" width="18" height="18" rx="2"/>
-          <line x1="16" y1="2" x2="16" y2="6"/>
-          <line x1="8"  y1="2" x2="8"  y2="6"/>
-          <line x1="3"  y1="10" x2="21" y2="10"/>
-        </svg>
-        upcoming events
-      </div>
-      <div class="cal-empty" id="cal-loading">fetching calendar...</div>
-    </div>
-
-    <!-- Week view -->
-    <div id="cal-week-view" class="hidden">
-      <div class="week-grid" id="week-grid"></div>
-    </div>
-
-    <!-- Input mode tabs -->
-    <div class="input-tabs">
-      <button class="tab active" id="tab-voice" onclick="switchTab('voice')">Voice</button>
-      <button class="tab" id="tab-text"  onclick="switchTab('text')">Text</button>
-      <button class="tab" id="tab-image" onclick="switchTab('image')">Image</button>
-    </div>
-
-    <!-- Voice panel -->
-    <div class="input-panel" id="panel-voice">
-      <div class="mic-wrapper">
-        <button class="mic-btn" id="mic-btn" onclick="toggleRecording()">
-          <svg class="mic-icon" viewBox="0 0 24 24">
-            <rect x="9" y="3" width="6" height="11" rx="3"/>
-            <path d="M5 10a7 7 0 0 0 14 0"/>
-            <line x1="12" y1="17" x2="12" y2="21"/>
-            <line x1="9"  y1="21" x2="15" y2="21"/>
+    <!-- App header -->
+    <div class="app-header">
+      <div class="wordmark">Scheduler</div>
+      <div class="app-header-right">
+        <span class="status-inline">
+          <span class="status-dot" id="cal-dot"></span>
+          <span id="cal-status">connecting...</span>
+        </span>
+        <button class="icon-btn" onclick="openSettings()" title="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
         </button>
-        <span class="mic-label" id="mic-label">tap to speak</span>
       </div>
     </div>
 
-    <!-- Text panel -->
-    <div class="input-panel hidden" id="panel-text">
-      <div class="text-input-wrapper">
-        <textarea id="text-input" placeholder="e.g. I need to study for linear algebra for 2 hours this week, and hit the gym tomorrow morning..." rows="4"></textarea>
-        <button class="btn btn-primary" onclick="submitText()">Schedule this →</button>
+    <!-- Calendar view pill switcher -->
+    <div class="cal-pill-row">
+      <div class="cal-pills">
+        <button class="cal-pill" id="pill-day"   onclick="switchCalView('day')">Day</button>
+        <button class="cal-pill active" id="pill-week"  onclick="switchCalView('week')">Week</button>
+        <button class="cal-pill" id="pill-month" onclick="switchCalView('month')">Month</button>
+        <button class="cal-pill" id="pill-year"  onclick="switchCalView('year')">Year</button>
       </div>
     </div>
 
-    <!-- Image panel -->
-    <div class="input-panel hidden" id="panel-image">
-      <div class="image-upload-wrapper" id="image-drop-zone" onclick="document.getElementById('image-file-input').click()">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="3" y="3" width="18" height="18" rx="2"/>
-          <circle cx="8.5" cy="8.5" r="1.5"/>
-          <polyline points="21 15 16 10 5 21"/>
-        </svg>
-        <span class="upload-label">tap to upload image</span>
-        <span class="upload-hint">screenshots, photos of schedules, whiteboards, etc.</span>
-        <input type="file" id="image-file-input" accept="image/*" style="display:none" onchange="handleImageUpload(event)" />
-      </div>
-      <div class="image-preview-wrapper hidden" id="image-preview-wrapper">
-        <img id="image-preview" src="" alt="uploaded" />
-        <div class="image-actions">
-          <span id="image-filename" class="image-filename"></span>
-          <button class="btn btn-ghost btn-sm" onclick="clearImage()">Remove</button>
+    <!-- Calendar views -->
+    <div id="cal-container">
+      <div id="cal-day-view"   class="cal-view hidden"></div>
+      <div id="cal-week-view"  class="cal-view"></div>
+      <div id="cal-month-view" class="cal-view hidden"></div>
+      <div id="cal-year-view"  class="cal-view hidden">
+        <div class="year-loading" id="year-loading">
+          <div class="spinner"></div>
+          <span>loading year data...</span>
         </div>
-        <textarea id="image-text-input" placeholder="Optional: add context (e.g. 'schedule these tasks around my classes')" rows="2"></textarea>
-        <button class="btn btn-primary" onclick="submitImage()">Schedule this →</button>
+        <div id="year-grid" class="hidden"></div>
       </div>
     </div>
 
-    <!-- Transcript display -->
-    <div class="transcript-box" id="transcript-box"></div>
+    <!-- Input area -->
+    <div class="input-area">
+      <!-- Image preview strip (shown when image attached) -->
+      <div class="image-strip hidden" id="image-strip">
+        <div class="image-thumb-wrap">
+          <img id="image-thumb" src="" alt="" />
+          <button class="image-remove-btn" onclick="clearImage()">×</button>
+        </div>
+      </div>
+
+      <!-- Transcript / text box -->
+      <div class="textarea-wrap">
+        <textarea
+          id="main-input"
+          placeholder="What do you need to schedule? Speak or type..."
+          rows="3"
+        ></textarea>
+        <div class="textarea-actions">
+          <div class="textarea-left">
+            <!-- Mic button -->
+            <button class="action-icon-btn" id="mic-btn" onclick="toggleRecording()" title="Voice input">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="3" width="6" height="11" rx="3"/>
+                <path d="M5 10a7 7 0 0 0 14 0"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+                <line x1="9"  y1="21" x2="15" y2="21"/>
+              </svg>
+            </button>
+            <!-- Image attach button -->
+            <button class="action-icon-btn" onclick="document.getElementById('image-file-input').click()" title="Attach image">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+            </button>
+            <input type="file" id="image-file-input" accept="image/*" style="display:none" onchange="handleImageUpload(event)" />
+          </div>
+          <button class="propose-btn" id="propose-btn" onclick="handlePropose()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            Propose
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Error -->
     <div class="error-box" id="error-box"></div>
-
-    <!-- Process button (voice only) -->
-    <button class="btn btn-primary" id="process-btn" onclick="processVoice()">Schedule this →</button>
 
     <!-- Loading -->
     <div id="loading-state">
@@ -157,7 +145,7 @@
 
     <!-- Proposals -->
     <div id="proposals-section">
-      <div class="proposals-header">// proposed schedule</div>
+      <div class="proposals-header">// proposed changes</div>
       <div id="proposals-list"></div>
       <div class="confirm-row">
         <button class="btn btn-confirm" onclick="confirmEvents()">Add to Calendar ✓</button>
@@ -167,6 +155,38 @@
 
   </div><!-- end app-screen -->
 </div><!-- end container -->
+
+<!-- Event detail popup -->
+<div id="event-popup" class="event-popup hidden">
+  <button class="popup-close" onclick="closeEventPopup()">×</button>
+  <div class="popup-title"  id="popup-title"></div>
+  <div class="popup-time"   id="popup-time"></div>
+  <div class="popup-desc"   id="popup-desc"></div>
+  <div class="popup-loc"    id="popup-loc"></div>
+</div>
+<div id="popup-overlay" class="popup-overlay hidden" onclick="closeEventPopup()"></div>
+
+<!-- Settings modal -->
+<div id="settings-modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-title">Settings</div>
+    <p class="modal-desc">Your API credentials are stored locally in this browser only.</p>
+    <div id="reset-confirm-area" class="hidden">
+      <p class="modal-warn">This will clear your Google Client ID and Anthropic API key. You'll need to re-enter them.</p>
+      <div class="modal-btns">
+        <button class="btn btn-red" onclick="resetConfig()">Yes, reset everything</button>
+        <button class="btn btn-ghost" onclick="closeSettings()">Cancel</button>
+      </div>
+    </div>
+    <div id="reset-initial-area">
+      <div class="modal-btns">
+        <button class="btn btn-red-outline" onclick="showResetConfirm()">Reset credentials</button>
+        <button class="btn btn-ghost" onclick="closeSettings()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="modal-overlay" class="popup-overlay hidden" onclick="closeSettings()"></div>
 
 <div class="toast" id="toast"></div>
 <script src="app.js"></script>
