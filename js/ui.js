@@ -78,14 +78,38 @@ function openSettings() {
   const modal = document.getElementById('settings-modal');
   if (!modal.classList.contains('hidden')) { closeSettings(); return; }
   modal.classList.remove('hidden');
+  document.getElementById('modal-backdrop').classList.remove('hidden');
   document.getElementById('reset-confirm-area').classList.add('hidden');
   document.getElementById('reset-initial-area').classList.remove('hidden');
   renderSwatches();
   renderCalendarToggles();
+  // Populate memory textarea
+  const mem = localStorage.getItem('scheduler_memory') || '';
+  document.getElementById('memory-input').value = mem;
+  updateMemoryCharCount(mem.length);
+}
+
+const MEMORY_MAX = 500;
+
+function onMemoryInput() {
+  const el  = document.getElementById('memory-input');
+  if (el.value.length > MEMORY_MAX) el.value = el.value.slice(0, MEMORY_MAX);
+  updateMemoryCharCount(el.value.length);
+}
+
+function updateMemoryCharCount(n) {
+  const el = document.getElementById('memory-char-count');
+  if (el) el.textContent = `${n}/${MEMORY_MAX}`;
+}
+
+function saveMemory() {
+  const val = document.getElementById('memory-input').value.slice(0, MEMORY_MAX);
+  localStorage.setItem('scheduler_memory', val);
 }
 
 function closeSettings() {
   document.getElementById('settings-modal').classList.add('hidden');
+  document.getElementById('modal-backdrop').classList.add('hidden');
 }
 
 function showResetConfirm() {
@@ -119,7 +143,17 @@ function toggleCalendar(id, enabled) {
   else         enabledCalendars.delete(id);
   if (enabledCalendars.size === 0) enabledCalendars.add(id);
   localStorage.setItem('scheduler_enabled_cals', JSON.stringify([...enabledCalendars]));
-  renderCalendarToggles();
+
+  // Animate the pill in-place — no DOM rebuild so the CSS transition fires
+  const row  = document.querySelector(`.cal-toggle-row[onclick*="'${id}'"]`);
+  const pill = row?.querySelector('.cal-toggle-pill');
+  if (pill) {
+    const isOn = enabledCalendars.has(id);
+    pill.classList.toggle('on', isOn);
+    // Update the onclick for the next click
+    row.setAttribute('onclick', `toggleCalendar('${id}', ${!isOn})`);
+  }
+
   fetchEvents7();
   fetchEventsYear();
 }

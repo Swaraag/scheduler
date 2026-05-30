@@ -137,7 +137,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 
 .app-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding-bottom: 4px;
+  padding-bottom: 4px; position: relative; z-index: 301;
 }
 .app-header-right { display: flex; align-items: center; gap: 12px; }
 
@@ -228,6 +228,16 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   background: var(--surface2);
 }
 .tg-corner { border-right: 1px solid var(--border); }
+.tg-nav-corner {
+  display: flex; align-items: center; justify-content: center;
+  gap: 2px; padding: 4px;
+}
+.tg-nav-btn {
+  background: none; border: none; color: var(--muted);
+  font-size: 18px; line-height: 1; cursor: pointer;
+  padding: 2px 5px; border-radius: 4px; transition: color 0.15s, background 0.15s;
+}
+.tg-nav-btn:hover { color: var(--accent); background: rgba(255,255,255,0.04); }
 .tg-day-label {
   padding: 10px 6px; text-align: center;
   font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
@@ -331,6 +341,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   min-height: 72px; padding: 6px; border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border); cursor: pointer;
   transition: background 0.15s; position: relative;
+  min-width: 0; overflow: hidden;
 }
 .month-cell:nth-child(7n) { border-right: none; }
 .month-cell:hover { background: rgba(200,241,53,0.03); }
@@ -353,6 +364,19 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   padding: 40px; justify-content: center; color: var(--muted); font-size: 13px;
 }
 .year-grid-wrap { padding: 16px; }
+.year-nav-header, .month-nav-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.year-nav-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; color: var(--soft);
+}
+.month-nav-header {
+  padding: 10px 16px 8px; border-bottom: 1px solid var(--border); margin-bottom: 0;
+}
+.month-nav-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; color: var(--soft);
+}
 .year-months { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .year-month { cursor: pointer; }
 .year-month-name {
@@ -636,6 +660,17 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--muted); margin-left: 5px;
 }
+/* ── MEMORY TEXTAREA ── */
+.memory-textarea {
+  font-family: 'DM Mono', monospace; font-size: 12px;
+  background: var(--surface3); border: 1px solid var(--border);
+  border-radius: var(--r); color: var(--soft); padding: 10px 12px;
+  width: 100%; resize: vertical; outline: none;
+  transition: border-color 0.15s; line-height: 1.6; min-height: 70px;
+}
+.memory-textarea:focus { border-color: var(--accent); color: var(--text); }
+.memory-char-count { font-size: 9px; color: var(--muted); letter-spacing: 0.04em; font-family: 'DM Mono', monospace; }
+
 .cal-toggle-row { cursor: pointer; }
 .cal-toggle-pill {
   width: 32px; height: 18px; border-radius: 9px;
@@ -651,6 +686,12 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .cal-toggle-pill.on .cal-toggle-thumb { transform: translateX(14px); background: #000; }
 
 /* ── SETTINGS MODAL ── */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 299;
+  background: transparent;
+}
+.modal-backdrop.hidden { display: none; }
+
 .modal { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .modal-box {
   background: var(--surface2); border: 1px solid var(--border2);

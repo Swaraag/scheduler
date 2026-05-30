@@ -9,9 +9,14 @@ function buildSystemPrompt() {
     return `- "${e.summary || 'Untitled'}" from ${s} to ${en}`;
   }).join('\n') || '(no existing events)';
 
+  const memory = localStorage.getItem('scheduler_memory') || '';
+  const memorySection = memory
+    ? `\nUser preferences and memory:\n${memory}\n`
+    : '';
+
   return `You are a scheduling assistant. Today is ${now.toISOString()} \
 (${now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}).
-
+${memorySection}
 User's existing calendar events for the next 7 days:
 ${calContext}
 
@@ -21,6 +26,7 @@ Your job:
 3. Use reasonable durations if not specified (gym=1hr, homework=1-2hr, etc).
 4. Schedule at sensible times (gym=morning/evening, study=afternoon/evening, etc).
 5. Extract any additional details mentioned: location, reminders, notes, color.
+6. Apply any user preferences from memory when choosing times and durations.
 
 Respond ONLY with a valid JSON array. No prose, no markdown, no code fences.
 
@@ -32,7 +38,8 @@ Each object must have exactly these fields (use null for ones not mentioned):
 - "location":       string|null
 - "notes":          string|null
 - "reminderMins":   number|null
-- "color":          string|null  (one of: "tomato","flamingo","tangerine","banana","sage","basil","peacock","blueberry","lavender","grape","graphite")`;
+- "color":          string|null  (one of: "tomato","flamingo","tangerine","banana","sage","basil","peacock","blueberry","lavender","grape","graphite")
+- "recurrence":     string|null  (RRULE string for recurring events, or null for one-off events. Examples: daily="RRULE:FREQ=DAILY", weekdays="RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR", weekly="RRULE:FREQ=WEEKLY;BYDAY=MO", biweekly="RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO", monthly="RRULE:FREQ=MONTHLY;BYDAY=1MO", N times="RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=8", until date="RRULE:FREQ=WEEKLY;BYDAY=MO;UNTIL=20251231T000000Z". Only set this when the user explicitly says recurring/every/each/weekly/daily/etc.)`;
 }
 
 async function scheduleFromText(text) {
@@ -98,7 +105,7 @@ function renderProposals() {
     const state = ev._state || 'pending';
     if (!ev._calendarId) ev._calendarId = primaryId;
     const colorOpts = COLOR_OPTIONS.map(([v,l]) => `<option value="${v}" ${ev.color===v?'selected':''}>${l}</option>`).join('');
-    const hasExtras = ev.location || ev.notes || ev.reminderMins || ev.color;
+    const hasExtras = ev.location || ev.notes || ev.reminderMins || ev.color || ev.recurrence;
     const calPickerRow = allCalendars.length > 1 ? `
       <div class="extra-field-row">
         <span class="extra-field-label">Calendar</span>
@@ -147,6 +154,12 @@ function renderProposals() {
           <div class="extra-field-row">
             <span class="extra-field-label">Color</span>
             <select class="extra-field-select" onchange="updateProposal(${i},'color',this.value)">${colorOpts}</select>
+          </div>
+          <div class="extra-field-row">
+            <span class="extra-field-label">Repeat</span>
+            <input class="extra-field-input" type="text" placeholder="e.g. RRULE:FREQ=WEEKLY;BYDAY=MO"
+              value="${ev.recurrence||''}"
+              onchange="updateProposal(${i},'recurrence',this.value||null)" />
           </div>
         </div>
       </div>
@@ -217,6 +230,7 @@ async function confirmEvents() {
           : { useDefault: true },
       };
       if (ev.color && COLOR_MAP[ev.color]) body.colorId = COLOR_MAP[ev.color];
+      if (ev.recurrence) body.recurrence = [ev.recurrence];
       const targetCal = ev._calendarId || 'primary';
       const res = await fetch(`${CAL_API}/calendars/${encodeURIComponent(targetCal)}/events`, {
         method: 'POST',
@@ -231,6 +245,38 @@ async function confirmEvents() {
   await fetchEvents7();
   resetUI();
   showToast(`${added} event${added>1?'s':''} added to Google Calendar ✓`, 'success');
+  updateMemoryAfterConfirm(toAdd);
+}
+
+async function updateMemoryAfterConfirm(addedEvents) {
+  try {
+    const current = localStorage.getItem('scheduler_memory') || '';
+    const summary = addedEvents.map(e => `- "${e.title}" at ${e.start}`).join('\n');
+    const res = await fetch(CLAUDE_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type':                              'application/json',
+        'x-api-key':                                 config.apiKey,
+        'anthropic-version':                         '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 200,
+        system: `You maintain a short memory string (max 500 chars) of a user's scheduling preferences and habits.
+Extract any durable preferences from the events they just scheduled — preferred times, typical durations, patterns.
+Do NOT record one-off events as preferences. Only write preferences that would help schedule future events.
+Current memory: "${current}"
+Rewrite the entire memory string incorporating any new insights. If nothing new is worth remembering, return the current memory unchanged.
+Respond with ONLY the new memory string. No quotes, no labels, no explanation.`,
+        messages: [{ role: 'user', content: `User just scheduled:\n${summary}` }],
+      }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const newMem = (data.content?.[0]?.text || '').trim().slice(0, 500);
+    if (newMem) localStorage.setItem('scheduler_memory', newMem);
+  } catch {}
 }
 
 // ── EVENT POPUP ────────────────────────────────────────────
@@ -263,9 +309,14 @@ function _renderPopup(data, cx, cy) {
   document.getElementById('popup-desc').textContent = data.desc || '';
   document.getElementById('popup-loc').textContent  = data.loc ? `📍 ${data.loc}` : '';
 
-  document.getElementById('popup-actions').innerHTML = data.id ? `
-    <button class="popup-edit-btn"   onclick="openEventEdit()">Edit</button>
-    <button class="popup-delete-btn" onclick="deleteEvent()">Delete</button>` : '';
+  if (data.isProposed) {
+    document.getElementById('popup-actions').innerHTML =
+      `<button class="popup-edit-btn" onclick="closeEventPopup();document.getElementById('card-${data.idx}')?.scrollIntoView({behavior:'smooth',block:'center'})">View card ↓</button>`;
+  } else {
+    document.getElementById('popup-actions').innerHTML = data.id ? `
+      <button class="popup-edit-btn"   onclick="openEventEdit()">Edit</button>
+      <button class="popup-delete-btn" onclick="deleteEvent()">Delete</button>` : '';
+  }
 
   document.getElementById('event-popup').classList.remove('hidden');
   document.getElementById('popup-overlay').classList.remove('hidden');

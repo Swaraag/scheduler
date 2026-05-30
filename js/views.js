@@ -1,11 +1,37 @@
 // Calendar view renderers: day, week, month, year + shared time grid
 
 function goToToday() {
-  currentDayDate = new Date();
-  switchCalView(currentView);
+  currentDayDate     = new Date();
+  currentWeekOffset  = 0;
+  currentMonthOffset = 0;
+  currentYearOffset  = 0;
+  switchCalView('day');
+}
+
+function navigateDay(delta) {
+  currentDayDate.setDate(currentDayDate.getDate() + delta);
+  renderDayView();
+}
+
+function navigateWeek(delta) {
+  currentWeekOffset += delta;
+  renderWeekView(proposedEvents.filter(e => e._state !== 'rejected'));
+}
+
+function navigateMonth(delta) {
+  currentMonthOffset += delta;
+  renderMonthView(proposedEvents.filter(e => e._state !== 'rejected'));
+}
+
+function navigateYear(delta) {
+  currentYearOffset += delta;
+  renderYearView();
 }
 
 function switchCalView(view, date) {
+  if (view !== 'week')  currentWeekOffset  = 0;
+  if (view !== 'month') currentMonthOffset = 0;
+  if (view !== 'year')  currentYearOffset  = 0;
   currentView = view;
   if (date) {
     const [y, m, d] = date.split('-').map(Number);
@@ -32,13 +58,13 @@ function renderDayView() {
   const target  = new Date(currentDayDate); target.setHours(0,0,0,0);
   const today   = new Date(); today.setHours(0,0,0,0);
   const isToday = target.toDateString() === today.toDateString();
-  const dayStr  = target.toISOString().slice(0,10);
+  const dayStr  = `${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,'0')}-${String(target.getDate()).padStart(2,'0')}`;
   const pool    = calEventsYear || calEvents7;
   const events  = pool.filter(e => (e.start.dateTime || e.start.date || '').slice(0,10) === dayStr);
   const DAY_NAMES  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const label = `${DAY_NAMES[target.getDay()]}, ${MONTH_ABBR[target.getMonth()]} ${target.getDate()}`;
-  el.innerHTML = buildTimeGrid([{ date: target, label, events, isToday }], 'single');
+  el.innerHTML = buildTimeGrid([{ date: target, label, events, isToday }], 'day');
   scrollToNow(el);
 }
 
@@ -46,16 +72,21 @@ function renderWeekView(extra = []) {
   const el    = document.getElementById('cal-week-view');
   const today = new Date(); today.setHours(0,0,0,0);
   const DAY_ABBR = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  // Anchor to today + offset
+  const anchor = new Date(today); anchor.setDate(today.getDate() + currentWeekOffset * 7);
+  // Use year events pool when available (covers past/future weeks outside the 7-day window)
+  const pool = calEventsYear || calEvents7;
   const cols = Array.from({ length: 7 }, (_, i) => {
-    const d      = new Date(today); d.setDate(today.getDate() + i);
-    const dayStr = d.toISOString().slice(0,10);
+    const d      = new Date(anchor); d.setDate(anchor.getDate() + i);
+    const dayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     return {
-      date: d, label: DAY_ABBR[d.getDay()], isToday: i === 0,
-      events:   calEvents7.filter(e => (e.start.dateTime || e.start.date || '').slice(0,10) === dayStr),
+      date: d, label: DAY_ABBR[d.getDay()],
+      isToday: d.toDateString() === today.toDateString(),
+      events:   pool.filter(e => (e.start.dateTime || e.start.date || '').slice(0,10) === dayStr),
       proposed: extra.filter(e => (e.start || '').slice(0,10) === dayStr),
     };
   });
-  el.innerHTML = buildTimeGrid(cols, 'multi');
+  el.innerHTML = buildTimeGrid(cols, 'week');
   scrollToNow(el);
 }
 
@@ -63,10 +94,19 @@ function buildTimeGrid(cols, mode) {
   const totalHours = WEEK_END_HOUR - WEEK_START_HOUR;
   const gridCols   = `44px repeat(${cols.length}, 1fr)`;
 
+  // Nav arrows: day view navigates by 1 day, week view by 1 week
+  const prevFn = mode === 'day' ? `navigateDay(-1)` : `navigateWeek(-1)`;
+  const nextFn = mode === 'day' ? `navigateDay(1)`  : `navigateWeek(1)`;
+  const navCorner = `
+    <div class="tg-corner tg-nav-corner">
+      <button class="tg-nav-btn" onclick="${prevFn}" title="Previous">‹</button>
+      <button class="tg-nav-btn" onclick="${nextFn}" title="Next">›</button>
+    </div>`;
+
   const headerCells = cols.map(c => {
     const ds = `${c.date.getFullYear()}-${String(c.date.getMonth()+1).padStart(2,'0')}-${String(c.date.getDate()).padStart(2,'0')}`;
-    return `<div class="tg-day-label ${c.isToday ? 'today' : ''} clickable"
-      onclick="switchCalView('day','${ds}')" title="View ${c.label}">
+    const clickable = mode !== 'day' ? `clickable" onclick="switchCalView('day','${ds}')" title="View ${c.label}` : ``;
+    return `<div class="tg-day-label ${c.isToday ? 'today' : ''} ${clickable}">
       ${c.label}<span class="day-num">${c.date.getDate()}</span>
     </div>`;
   }).join('');
@@ -88,7 +128,7 @@ function buildTimeGrid(cols, mode) {
 
   return `<div class="time-grid">
     <div class="tg-header" style="grid-template-columns:${gridCols}">
-      <div class="tg-corner" style="width:44px"></div>${headerCells}
+      ${navCorner}${headerCells}
     </div>
     <div class="tg-body" style="grid-template-columns:${gridCols}">
       <div class="tg-time-col">${timeLabels}</div>${dayCols}
@@ -120,12 +160,18 @@ function proposedBlock(ev, idx) {
   const state  = ev._state || 'pending';
   if (state === 'rejected') return '';
   const stateClass = state === 'accepted' ? 'proposed-accepted' : 'proposed-pending';
+  const data = encodeURIComponent(JSON.stringify({
+    title: ev.title, start: ev.start, end: ev.end,
+    desc: ev.description || '', loc: ev.location || '',
+    isProposed: true, idx,
+  }));
   const btns = height >= 48 ? `
     <div class="prop-block-actions">
       <button class="prop-block-btn accept" onclick="event.stopPropagation();acceptProposal(${idx})">✓</button>
       <button class="prop-block-btn reject" onclick="event.stopPropagation();rejectProposal(${idx})">✗</button>
     </div>` : '';
-  return `<div class="tg-event proposed ${stateClass}" style="top:${top}px;height:${height}px" id="prop-block-${idx}">
+  return `<div class="tg-event proposed ${stateClass}" style="top:${top}px;height:${height}px" id="prop-block-${idx}"
+    onclick="showEventPopup(event,'${data}')">
     <div class="tg-event-title">${ev.title}</div>${btns}
   </div>`;
 }
@@ -138,19 +184,27 @@ function scrollToNow(el) {
 function renderMonthView(extra = []) {
   const el    = document.getElementById('cal-month-view');
   const today = new Date();
-  const year  = today.getFullYear();
-  const month = today.getMonth();
+  // Apply offset: shift month, let Date handle year rollovers
+  const base  = new Date(today.getFullYear(), today.getMonth() + currentMonthOffset, 1);
+  const year  = base.getFullYear();
+  const month = base.getMonth();
+  const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+
   const firstDay = new Date(year, month, 1);
   const lastDay  = new Date(year, month + 1, 0);
   const DAY_NAMES   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+  // Use year events if available (covers non-current months), fall back to 7-day pool
+  const pool = calEventsYear || calEvents7;
+
   let cells = Array(firstDay.getDay()).fill({ empty: true });
   for (let d = 1; d <= lastDay.getDate(); d++) {
     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     cells.push({
-      d, dateStr, isToday: d === today.getDate(),
-      events:   calEvents7.filter(e => (e.start.dateTime || e.start.date || '').slice(0,10) === dateStr),
+      d, dateStr,
+      isToday: isCurrentMonth && d === today.getDate(),
+      events:   pool.filter(e => (e.start.dateTime || e.start.date || '').slice(0,10) === dateStr),
       proposed: extra.filter(e => (e.start || '').slice(0,10) === dateStr),
     });
   }
@@ -173,8 +227,10 @@ function renderMonthView(extra = []) {
   }).join('');
 
   el.innerHTML = `<div class="month-grid">
-    <div style="padding:12px 16px 8px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--soft);border-bottom:1px solid var(--border)">
-      ${MONTH_NAMES[month]} ${year}
+    <div class="month-nav-header">
+      <button class="tg-nav-btn" onclick="navigateMonth(-1)">‹</button>
+      <span class="month-nav-title">${MONTH_NAMES[month]} ${year}</span>
+      <button class="tg-nav-btn" onclick="navigateMonth(1)">›</button>
     </div>
     <div class="month-header-row">${DAY_NAMES.map(d => `<div class="month-day-name">${d}</div>`).join('')}</div>
     <div class="month-body">${cellsHtml}</div>
@@ -188,7 +244,7 @@ function renderYearView() {
   loadingEl.classList.add('hidden'); gridEl.classList.remove('hidden');
 
   const today = new Date();
-  const year  = today.getFullYear();
+  const year  = today.getFullYear() + currentYearOffset;
   const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   const countMap = {};
@@ -208,11 +264,18 @@ function renderYearView() {
       const isToday = today.getFullYear() === year && today.getMonth() === mi && today.getDate() === d;
       cells.push(`<div class="year-day has-events-${level} ${isToday?'today':''}" title="${count} event${count!==1?'s':''}"></div>`);
     }
-    return `<div class="year-month" onclick="switchCalView('month')" title="View ${name}">
+    return `<div class="year-month" onclick="switchCalView('month');currentMonthOffset=${(year - today.getFullYear()) * 12 + mi - today.getMonth()};renderMonthView()" title="View ${name} ${year}">
       <div class="year-month-name">${name}</div>
       <div class="year-month-grid">${cells.join('')}</div>
     </div>`;
   }).join('');
 
-  gridEl.innerHTML = `<div class="year-grid-wrap"><div class="year-months">${monthsHtml}</div></div>`;
+  gridEl.innerHTML = `<div class="year-grid-wrap">
+    <div class="year-nav-header">
+      <button class="tg-nav-btn" onclick="navigateYear(-1)">‹</button>
+      <span class="year-nav-title">${year}</span>
+      <button class="tg-nav-btn" onclick="navigateYear(1)">›</button>
+    </div>
+    <div class="year-months">${monthsHtml}</div>
+  </div>`;
 }

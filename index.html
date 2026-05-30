@@ -228,6 +228,11 @@
       <div id="calendar-toggles"></div>
     </div>
 
+    <div class="settings-section">
+      <div class="settings-section-label">Memory <span id="memory-char-count" class="memory-char-count"></span></div>
+      <textarea id="memory-input" class="memory-textarea" placeholder="Claude will remember preferences here — e.g. 'prefers evening workouts, no meetings before 9am'..." rows="3" oninput="onMemoryInput()" onblur="saveMemory()"></textarea>
+    </div>
+
     <div id="reset-confirm-area" class="hidden">
       <p class="modal-warn">This will clear your Google Client ID and Anthropic API key. You'll need to re-enter them.</p>
       <div class="modal-btns">
@@ -243,6 +248,7 @@
     </div>
   </div>
 </div>
+<div id="modal-backdrop" class="modal-backdrop hidden"></div>
 <div class="toast" id="toast"></div>
 <script src="js/state.js"></script>
 <script src="js/auth.js"></script>
