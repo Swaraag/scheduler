@@ -196,7 +196,14 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 }
 .tg-day-label.today .day-num { color: var(--accent); }
 
-.tg-body { display: grid; overflow-y: auto; max-height: 380px; }
+.tg-body {
+  display: grid; overflow-y: auto; max-height: 380px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface3) transparent;
+}
+.tg-body::-webkit-scrollbar { width: 4px; }
+.tg-body::-webkit-scrollbar-track { background: transparent; }
+.tg-body::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
 .tg-time-col { border-right: 1px solid var(--border); }
 .tg-time-label {
   height: 44px; display: flex; align-items: flex-start;
@@ -330,9 +337,38 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   display: flex; align-items: center; transition: all 0.15s;
 }
 .action-icon-btn:hover { background: var(--surface2); color: var(--soft); }
-.action-icon-btn.recording { color: var(--red); animation: pulse-icon 1.2s ease-in-out infinite; }
-@keyframes pulse-icon {
-  0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+
+/* ── CENTRAL MIC ZONE ── */
+.mic-center-zone {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 8px 0;
+}
+
+.mic-center-btn {
+  width: 72px; height: 72px; border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: transparent;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; color: var(--accent);
+  position: relative;
+}
+.mic-center-btn:hover {
+  background: rgba(200,241,53,0.07);
+  transform: scale(1.05);
+}
+.mic-center-btn.recording {
+  border-color: var(--red); color: var(--red);
+  background: rgba(255,68,68,0.07);
+  animation: mic-pulse 1.4s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,68,68,0.3); }
+  50%       { box-shadow: 0 0 0 16px rgba(255,68,68,0); }
+}
+
+.mic-center-label {
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted);
 }
 
 .propose-btn {
@@ -426,7 +462,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 }
 .popup-close:hover { color: var(--text); }
 .popup-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px; margin-bottom: 6px; padding-right: 20px; }
-.popup-time { font-size: 12px; color: var(--accent); margin-bottom: 6px; }
+.popup-time { font-size: 12px; color: var(--accent); margin-bottom: 6px; letter-spacing: 0.02em; }
 .popup-desc { font-size: 12px; color: var(--soft); line-height: 1.5; margin-bottom: 4px; }
 .popup-loc  { font-size: 12px; color: var(--muted); }
 .popup-overlay { position: fixed; inset: 0; z-index: 199; }

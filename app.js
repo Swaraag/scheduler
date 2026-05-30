@@ -412,13 +412,29 @@ function _renderPopup(data, cx, cy) {
   const popup = document.getElementById('event-popup');
   document.getElementById('popup-title').textContent = data.title || 'Event';
 
-  const fmt = (iso) => {
+  // Format: "Mon, Jun 1  2:00 – 3:00 PM"
+  const fmtDate = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
-    return d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })
-      + (iso.includes('T') ? ' · ' + d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' }) : '');
+    return d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
   };
-  const timeStr = data.end ? `${fmt(data.start)} – ${fmt(data.end)}` : fmt(data.start);
+  const fmtTime = (iso) => {
+    if (!iso || !iso.includes('T')) return '';
+    return new Date(iso).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+  };
+  let timeStr = '';
+  if (data.start) {
+    const dateLabel = fmtDate(data.start);
+    const startTime = fmtTime(data.start);
+    const endTime   = fmtTime(data.end);
+    if (startTime && endTime) {
+      timeStr = `${dateLabel}  ·  ${startTime} – ${endTime}`;
+    } else if (startTime) {
+      timeStr = `${dateLabel}  ·  ${startTime}`;
+    } else {
+      timeStr = dateLabel;
+    }
+  }
   document.getElementById('popup-time').textContent = timeStr;
   document.getElementById('popup-desc').textContent = data.desc || '';
   document.getElementById('popup-loc').textContent  = data.loc  ? `📍 ${data.loc}` : '';
@@ -472,18 +488,16 @@ function startRecording() {
   recognition.start();
   isRecording = true;
 
-  const btn = document.getElementById('mic-btn');
-  btn.classList.add('recording');
-  btn.title = 'Tap to stop recording';
+  document.getElementById('mic-btn').classList.add('recording');
+  document.getElementById('mic-label').textContent = 'tap to stop';
   hideError();
 }
 
 function stopRecording() {
   if (recognition) { recognition.onend = null; recognition.stop(); }
   isRecording = false;
-  const btn = document.getElementById('mic-btn');
-  btn.classList.remove('recording');
-  btn.title = 'Voice input';
+  document.getElementById('mic-btn').classList.remove('recording');
+  document.getElementById('mic-label').textContent = 'tap to speak';
 }
 
 // ── IMAGE INPUT ────────────────────────────────────────────
