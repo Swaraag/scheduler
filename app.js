@@ -78,25 +78,61 @@ function resetConfig() {
 }
 
 // ── GOOGLE AUTH ────────────────────────────────────────────
+function saveToken(token) {
+  gapiToken = token;
+  localStorage.setItem('scheduler_token', JSON.stringify({
+    token,
+    expiry: Date.now() + 55 * 60 * 1000, // 55 min (tokens last 1hr, expire early for safety)
+  }));
+}
+
+function loadSavedToken() {
+  try {
+    const saved = localStorage.getItem('scheduler_token');
+    if (!saved) return false;
+    const { token, expiry } = JSON.parse(saved);
+    if (Date.now() < expiry) { gapiToken = token; return true; }
+  } catch {}
+  return false;
+}
+
+function onAuthSuccess() {
+  setCalStatus(true, 'calendar connected');
+  fetchEvents7();
+  fetchEventsYear();
+}
+
 function initGoogleAuth() {
-  const s  = document.createElement('script');
-  s.src    = 'https://accounts.google.com/gsi/client';
-  s.onload = () => {
-    const tc = google.accounts.oauth2.initTokenClient({
-      client_id: config.clientId,
-      scope:     GOOGLE_SCOPES,
-      callback:  (resp) => {
-        if (resp.error) { setCalStatus(false, 'auth failed'); return; }
-        gapiToken = resp.access_token;
-        setCalStatus(true, 'calendar connected');
-        fetchEvents7();
-        fetchEventsYear(); // kick off background fetch immediately
-      },
-    });
-    window._tokenClient = tc;
-    tc.requestAccessToken({ prompt: '' });
+  const loadGIS = (onload) => {
+    const s = document.createElement('script');
+    s.src   = 'https://accounts.google.com/gsi/client';
+    s.onload = onload;
+    document.head.appendChild(s);
   };
-  document.head.appendChild(s);
+
+  const makeTokenClient = () => google.accounts.oauth2.initTokenClient({
+    client_id: config.clientId,
+    scope:     GOOGLE_SCOPES,
+    callback:  (resp) => {
+      if (resp.error) { setCalStatus(false, 'auth failed'); return; }
+      saveToken(resp.access_token);
+      onAuthSuccess();
+    },
+  });
+
+  // If a valid cached token exists, use it immediately — no popup
+  if (loadSavedToken()) {
+    onAuthSuccess();
+    // Load GIS silently in background so re-auth works when token eventually expires
+    loadGIS(() => { window._tokenClient = makeTokenClient(); });
+    return;
+  }
+
+  // No valid token — load GIS and trigger auth
+  loadGIS(() => {
+    window._tokenClient = makeTokenClient();
+    window._tokenClient.requestAccessToken({ prompt: '' });
+  });
 }
 
 // ── CALENDAR FETCH ─────────────────────────────────────────
