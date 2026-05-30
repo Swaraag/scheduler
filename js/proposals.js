@@ -219,9 +219,15 @@ function renderProposals() {
           </div>
           <div class="extra-field-row">
             <span class="extra-field-label">Repeat</span>
-            <input class="extra-field-input" type="text" placeholder="e.g. RRULE:FREQ=WEEKLY;BYDAY=MO"
-              value="${ev.recurrence||''}"
-              onchange="updateProposal(${i},'recurrence',this.value||null)" />
+            <select class="extra-field-select" onchange="updateProposal(${i},'recurrence',this.value||null)">
+              <option value="" ${!ev.recurrence?'selected':''}>Does not repeat</option>
+              <option value="RRULE:FREQ=DAILY" ${ev.recurrence==='RRULE:FREQ=DAILY'?'selected':''}>Every day</option>
+              <option value="RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" ${ev.recurrence==='RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'?'selected':''}>Every weekday (Mon–Fri)</option>
+              <option value="RRULE:FREQ=WEEKLY" ${ev.recurrence?.startsWith('RRULE:FREQ=WEEKLY') && !ev.recurrence?.includes('INTERVAL=2') && !ev.recurrence?.includes('BYDAY=MO,TU')?'selected':''}>Every week</option>
+              <option value="RRULE:FREQ=WEEKLY;INTERVAL=2" ${ev.recurrence==='RRULE:FREQ=WEEKLY;INTERVAL=2'?'selected':''}>Every 2 weeks</option>
+              <option value="RRULE:FREQ=MONTHLY" ${ev.recurrence==='RRULE:FREQ=MONTHLY'?'selected':''}>Every month</option>
+              <option value="RRULE:FREQ=YEARLY" ${ev.recurrence==='RRULE:FREQ=YEARLY'?'selected':''}>Every year</option>
+            </select>
           </div>
         </div>
       </div>
@@ -341,20 +347,37 @@ Respond with ONLY the new memory string. No quotes, no labels, no explanation.`,
 }
 
 // ── EVENT POPUP ────────────────────────────────────────────
-let _popupEventData = null;
+let _popupEventData  = null;
+let _popupHoverOnly  = false; // true = opened by hover, closes on mouseleave
+let _popupCloseTimer = null;
 
-function showEventPopup(mouseEvent, encodedData) {
+function showEventPopup(mouseEvent, encodedData, hoverOpened = false) {
   mouseEvent.stopPropagation();
-  _renderPopup(JSON.parse(decodeURIComponent(encodedData)), mouseEvent.clientX, mouseEvent.clientY);
+  _renderPopup(JSON.parse(decodeURIComponent(encodedData)), mouseEvent.clientX, mouseEvent.clientY, hoverOpened);
 }
 
 function showEventPopupFromEl(mouseEvent, jsonStr) {
   mouseEvent.stopPropagation();
-  _renderPopup(JSON.parse(jsonStr), mouseEvent.clientX, mouseEvent.clientY);
+  _renderPopup(JSON.parse(jsonStr), mouseEvent.clientX, mouseEvent.clientY, false);
 }
 
-function _renderPopup(data, cx, cy) {
+function _renderPopup(data, cx, cy, hoverOpened = false) {
+  const popup   = document.getElementById('event-popup');
+  const overlay = document.getElementById('popup-overlay');
+
+  // If popup is already showing the same event and we're clicking (solidifying), just solidify
+  if (_popupEventData && _popupHoverOnly && !hoverOpened &&
+      _popupEventData.title === data.title && _popupEventData.start === data.start) {
+    _popupHoverOnly = false;
+    popup.classList.add('solidified');
+    overlay.classList.remove('hidden');
+    return;
+  }
+
   _popupEventData = data;
+  _popupHoverOnly = hoverOpened;
+  clearTimeout(_popupCloseTimer);
+
   document.getElementById('popup-read-view').classList.remove('hidden');
   document.getElementById('popup-edit-view').classList.add('hidden');
   document.getElementById('popup-title').textContent = data.title || 'Event';
@@ -379,16 +402,27 @@ function _renderPopup(data, cx, cy) {
       <button class="popup-delete-btn" onclick="deleteEvent()">Delete</button>` : '';
   }
 
-  document.getElementById('event-popup').classList.remove('hidden');
-  document.getElementById('popup-overlay').classList.remove('hidden');
-
   const vw = window.innerWidth, vh = window.innerHeight;
   let left = cx + 12, top = cy + 12;
   if (left + 320 > vw - 10) left = cx - 332;
   if (top  + 220 > vh - 10) top  = cy - 232;
-  const popup = document.getElementById('event-popup');
   popup.style.left = `${Math.max(10, left)}px`;
   popup.style.top  = `${Math.max(10, top)}px`;
+
+  // Overlay blocks background clicks — only for solidified (click-opened) popups
+  if (hoverOpened) {
+    overlay.classList.add('hidden');
+  } else {
+    overlay.classList.remove('hidden');
+  }
+
+  // Reset state, show, then transition in on next two frames so CSS picks up initial opacity:0
+  popup.classList.remove('visible', 'solidified');
+  popup.classList.remove('hidden');
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    popup.classList.add('visible');
+    if (!hoverOpened) popup.classList.add('solidified');
+  }));
 }
 
 function openEventEdit() {
@@ -460,9 +494,18 @@ async function confirmDeleteEvent(id) {
 }
 
 function closeEventPopup() {
-  document.getElementById('event-popup').classList.add('hidden');
+  const popup = document.getElementById('event-popup');
+  popup.classList.remove('visible', 'solidified');
+  // Always hide the overlay immediately so nothing blocks the page
   document.getElementById('popup-overlay').classList.add('hidden');
+  _popupCloseTimer = setTimeout(() => popup.classList.add('hidden'), 180);
   _popupEventData = null;
+  _popupHoverOnly = false;
+}
+
+function _closeHoverPopup() {
+  if (!_popupHoverOnly) return;
+  closeEventPopup();
 }
 
 window.addEventListener('scroll', closeEventPopup, { passive: true });

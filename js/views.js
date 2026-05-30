@@ -45,15 +45,18 @@ function switchCalView(view, date) {
 }
 
 function renderCurrentView() {
+  const visible = (typeof proposedEvents !== 'undefined')
+    ? proposedEvents.filter(e => e._state !== 'rejected')
+    : [];
   switch (currentView) {
-    case 'day':   renderDayView();   break;
-    case 'week':  renderWeekView();  break;
-    case 'month': renderMonthView(); break;
-    case 'year':  renderYearView();  break;
+    case 'day':   renderDayView(visible);   break;
+    case 'week':  renderWeekView(visible);  break;
+    case 'month': renderMonthView(visible); break;
+    case 'year':  renderYearView();         break;
   }
 }
 
-function renderDayView() {
+function renderDayView(extra = []) {
   const el      = document.getElementById('cal-day-view');
   const target  = new Date(currentDayDate); target.setHours(0,0,0,0);
   const today   = new Date(); today.setHours(0,0,0,0);
@@ -61,10 +64,11 @@ function renderDayView() {
   const dayStr  = `${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,'0')}-${String(target.getDate()).padStart(2,'0')}`;
   const pool    = calEventsYear || calEvents7;
   const events  = pool.filter(e => (e.start.dateTime || e.start.date || '').slice(0,10) === dayStr);
+  const proposed = extra.filter(e => (e.start || '').slice(0,10) === dayStr);
   const DAY_NAMES  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const label = `${DAY_NAMES[target.getDay()]}, ${MONTH_ABBR[target.getMonth()]} ${target.getDate()}`;
-  el.innerHTML = buildTimeGrid([{ date: target, label, events, isToday }], 'day');
+  el.innerHTML = buildTimeGrid([{ date: target, label, events, proposed, isToday }], 'day');
   scrollToNow(el);
 }
 
@@ -166,20 +170,151 @@ function proposedBlock(ev, idx) {
     desc: ev.description || '', loc: ev.location || '',
     isProposed: true, idx,
   }));
-  const btns = height >= 48 ? `
+  return `<div class="tg-event proposed ${stateClass}" style="top:${top}px;height:${height}px" id="prop-block-${idx}"
+    onclick="showEventPopup(event,'${data}')">
+    <div class="tg-event-title">${ev.title}</div>
     <div class="prop-block-actions">
       <button class="prop-block-btn accept" onclick="event.stopPropagation();acceptProposal(${idx})">✓</button>
       <button class="prop-block-btn reject" onclick="event.stopPropagation();rejectProposal(${idx})">✗</button>
-    </div>` : '';
-  return `<div class="tg-event proposed ${stateClass}" style="top:${top}px;height:${height}px" id="prop-block-${idx}"
-    onclick="showEventPopup(event,'${data}')">
-    <div class="tg-event-title">${ev.title}</div>${btns}
+    </div>
   </div>`;
 }
 
 function scrollToNow(el) {
   const body = el.querySelector('.tg-body');
-  if (body) body.scrollTop = Math.max(0, (new Date().getHours() - WEEK_START_HOUR - 1)) * HOUR_PX;
+  if (body) {
+    body.scrollTop = Math.max(0, (new Date().getHours() - WEEK_START_HOUR - 1)) * HOUR_PX;
+    attachGridInteractions(body);
+  }
+}
+
+// ── HOVER-TO-OPEN + DRAG-TO-RESCHEDULE ────────────────────
+let _hoverTimer     = null;
+let _hoverLeaveTimer = null;
+
+function attachGridInteractions(gridBody) {
+  // Use mouseover/mouseout (they bubble) so entering from any side/child works
+  gridBody.addEventListener('mouseover', (e) => {
+    const block = e.target.closest('.tg-event');
+    if (!block) return;
+    // Only treat as "enter" if we're coming from outside the block
+    if (block.contains(e.relatedTarget)) return;
+    clearTimeout(_hoverTimer);
+    clearTimeout(_hoverLeaveTimer);
+    _hoverTimer = setTimeout(() => {
+      if (block.dataset.dragging) return;
+      const r = block.getBoundingClientRect();
+      const encoded = block.getAttribute('onclick')?.match(/showEventPopup\(event,'([^']+)'\)/)?.[1];
+      if (!encoded) return;
+      const data = JSON.parse(decodeURIComponent(encoded));
+      _renderPopup(data, r.right, r.top, true);
+    }, 700);
+  });
+
+  gridBody.addEventListener('mouseout', (e) => {
+    const block = e.target.closest('.tg-event');
+    if (!block) return;
+    // Only treat as "leave" if we're going outside the block
+    if (block.contains(e.relatedTarget)) return;
+    clearTimeout(_hoverTimer);
+    _hoverLeaveTimer = setTimeout(() => _closeHoverPopup(), 200);
+  });
+
+  // Wire popup interactions once globally
+  if (!window._popupHoverWired) {
+    window._popupHoverWired = true;
+    const popup = document.getElementById('event-popup');
+    // Moving into the popup cancels the close timer
+    popup.addEventListener('mouseenter', () => clearTimeout(_hoverLeaveTimer));
+    // Moving out of the popup closes it if hover-only
+    popup.addEventListener('mouseleave', () => {
+      _hoverLeaveTimer = setTimeout(() => _closeHoverPopup(), 150);
+    });
+    // Clicking anywhere on the popup solidifies it
+    popup.addEventListener('mousedown', () => {
+      clearTimeout(_hoverLeaveTimer);
+      _popupHoverOnly = false;
+      popup.classList.add('solidified');
+    });
+  }
+
+  // Drag: only on proposed blocks
+  gridBody.addEventListener('mousedown', (e) => {
+    const block = e.target.closest('.tg-event.proposed');
+    if (!block) return;
+    // Don't start drag if clicking a button
+    if (e.target.closest('.prop-block-btn')) return;
+
+    const idx = parseInt(block.id.replace('prop-block-', ''));
+    if (isNaN(idx)) return;
+
+    const ev         = proposedEvents[idx];
+    const col        = block.closest('.tg-day-col');
+    if (!col) return;
+
+    const startMs    = new Date(ev.start).getTime();
+    const endMs      = new Date(ev.end).getTime();
+    const durationMs = endMs - startMs;
+
+    const colRect    = col.getBoundingClientRect();
+    const startY     = e.clientY;
+    let   ghost      = null;
+    let   dragging   = false;
+    let   cancelled  = false;
+
+    const onMove = (me) => {
+      const dy = me.clientY - startY;
+      if (!dragging && Math.abs(dy) < 6) return;
+
+      if (!dragging) {
+        dragging = true;
+        clearTimeout(_hoverTimer);
+        block.dataset.dragging = '1';
+        // Create ghost
+        ghost = document.createElement('div');
+        ghost.className = 'drag-ghost';
+        ghost.style.height = block.style.height;
+        col.appendChild(ghost);
+        block.style.opacity = '0.3';
+      }
+
+      // Snap to 15-min increments
+      const deltaMins  = Math.round((dy / HOUR_PX) * 60 / 15) * 15;
+      const newTopPx   = Math.max(0, parseFloat(block.style.top) + (deltaMins / 60) * HOUR_PX);
+      ghost.style.top  = `${newTopPx}px`;
+    };
+
+    const onUp = (me) => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+
+      if (!dragging) { delete block.dataset.dragging; return; }
+
+      // Compute new start from ghost position
+      const newTopPx   = parseFloat(ghost.style.top);
+      const newStartH  = newTopPx / HOUR_PX + WEEK_START_HOUR;
+      const newStartDate = new Date(ev.start);
+      newStartDate.setHours(Math.floor(newStartH), Math.round((newStartH % 1) * 60), 0, 0);
+      const newEndDate   = new Date(newStartDate.getTime() + durationMs);
+
+      const pad = n => String(n).padStart(2, '0');
+      const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+
+      proposedEvents[idx].start = fmt(newStartDate);
+      proposedEvents[idx].end   = fmt(newEndDate);
+
+      ghost.remove();
+      delete block.dataset.dragging;
+      block.style.opacity = '';
+
+      _refreshCalWithProposals();
+      // Re-render the proposal card date/time fields
+      renderProposals();
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 }
 
 function renderMonthView(extra = []) {
