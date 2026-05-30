@@ -134,7 +134,7 @@ async function fetchCalendarName() {
 }
 
 function initGoogleAuth() {
-  
+
   const loadGIS = (onload) => {
     // If GIS already loaded (e.g. background reload), call immediately
     if (window.google?.accounts?.oauth2) { onload(); return; }
@@ -268,7 +268,10 @@ function goToToday() {
 
 function switchCalView(view, date) {
   currentView = view;
-  if (date) currentDayDate = new Date(date);
+  if (date) {
+    const [y, m, d] = date.split('-').map(Number);
+    currentDayDate = new Date(y, m - 1, d);
+  }
   ['day','week','month','year'].forEach(v => {
     document.getElementById(`pill-${v}`).classList.toggle('active', v === view);
     document.getElementById(`cal-${v}-view`).classList.toggle('hidden', v !== view);
@@ -432,7 +435,7 @@ function renderMonthView(extra = []) {
   // Actual days
   for (let d = 1; d <= lastDay.getDate(); d++) {
     const date    = new Date(year, month, d);
-    const dateStr = date.toISOString().slice(0,10);
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const evs     = calEvents7.filter(e => (e.start.dateTime || e.start.date || '').slice(0,10) === dateStr);
     const prop    = extra.filter(e => (e.start || '').slice(0,10) === dateStr);
     cells.push({ d, date, dateStr, events: evs, proposed: prop, isToday: d === today.getDate() });
