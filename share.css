@@ -1,7 +1,14 @@
 .share-screen { padding-top: 20px; }
-.share-hero { padding: 24px 0 20px; }
+.share-hero { padding: 36px 0 28px; }
+.share-hero .wordmark { font-size: 11px; margin-bottom: 12px; }
+.share-hero-name {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: clamp(26px, 5vw, 38px); color: var(--text);
+  line-height: 1.1; margin: 0 0 10px;
+}
+.share-hero-name span { color: var(--accent); }
 .share-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; margin: 12px 0 8px; }
-.share-sub { font-size: 13px; color: var(--soft); margin: 0; }
+.share-sub { font-size: 13px; color: var(--soft); margin: 0; line-height: 1.6; }
 .share-success-icon {
   width: 52px; height: 52px; border-radius: 50%;
   background: rgba(61,214,140,0.15); border: 2px solid var(--confirm);
@@ -36,6 +43,19 @@
 
 .share-manual-form { display: flex; flex-direction: column; gap: 12px; }
 .share-manual-row  { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Force dark-mode chrome on native date/time pickers */
+#pane-manual input[type="date"],
+#pane-manual input[type="time"] {
+  color-scheme: dark;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text);
+  font-family: 'DM Mono', monospace; font-size: 13px;
+  padding: 10px 12px; width: 100%; outline: none;
+  transition: border-color 0.15s;
+}
+#pane-manual input[type="date"]:focus,
+#pane-manual input[type="time"]:focus { border-color: var(--accent); }
 
 .share-attendee-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
 .share-attendee-row .input-group { flex: 1; min-width: 180px; }

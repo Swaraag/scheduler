@@ -190,7 +190,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 #cal-container {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--rl); overflow: hidden;
-  position: relative;
+  position: relative; min-height: 180px;
 }
 
 /* ── CAL LOADING OVERLAY ── */
@@ -201,6 +201,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--rl);
   transition: opacity 0.2s;
+  padding: 24px 24px 32px;
 }
 .cal-loading-inner {
   display: flex; flex-direction: column; align-items: center; gap: 14px;
@@ -218,6 +219,14 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--accent);
 }
+.overlay-action-btn {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  background: transparent; border: 1px solid var(--accent);
+  border-radius: var(--r); padding: 8px 20px;
+  color: var(--accent); cursor: pointer; transition: all 0.15s;
+}
+.overlay-action-btn:hover { background: rgba(200,241,53,0.08); }
 .cal-view { width: 100%; }
 
 /* ── DAY / WEEK SHARED ── */

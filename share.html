@@ -13,8 +13,9 @@
 
   <div id="main-screen" class="share-screen hidden">
     <div class="share-hero">
-      <div class="wordmark" id="share-wordmark">Schedule a meeting</div>
-      <p class="share-sub" id="share-sub">Pick a time or describe what you'd like to schedule.</p>
+      <div class="wordmark">Scheduler</div>
+      <h1 class="share-hero-name" id="share-wordmark">Schedule with <span>Swaraag</span></h1>
+      <p class="share-sub" id="share-sub">Browse availability below and request a time.</p>
     </div>
 
     <!-- Calendar pill switcher -->
@@ -83,6 +84,10 @@
           <div class="input-group">
             <span class="input-label">Your name</span>
             <input type="text" id="manual-name" placeholder="So the owner knows who's requesting" />
+          </div>
+          <div class="input-group">
+            <span class="input-label">Description (optional)</span>
+            <textarea id="manual-desc" rows="2" placeholder="What's this meeting about?" style="resize:vertical"></textarea>
           </div>
           <button class="propose-btn" style="margin-top:8px;width:100%;justify-content:center" onclick="handleManualSharePropose()">
             Request this time →

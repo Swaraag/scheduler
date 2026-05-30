@@ -27,8 +27,8 @@ window.onload = async () => {
     const data = await res.json();
     ownerEvents = data.busy || [];
     ownerName   = data.ownerName || 'Me';
-    document.getElementById('share-wordmark').textContent = `Schedule with ${ownerName}`;
-    document.getElementById('share-sub').textContent      = `${ownerName}'s availability. Pick a time or describe what you'd like.`;
+    document.getElementById('share-wordmark').innerHTML = `Schedule with <span>${ownerName}</span>`;
+    document.getElementById('share-sub').textContent    = `Browse ${ownerName}'s availability and request a time.`;
     showScreen('main-screen');
     renderShareView();
   } catch (e) {
@@ -253,13 +253,15 @@ function handleManualSharePropose() {
   const start = document.getElementById('manual-start').value;
   const end   = document.getElementById('manual-end').value;
   const name  = document.getElementById('manual-name').value.trim();
+  const desc  = document.getElementById('manual-desc').value.trim();
   if (!title || !date || !start || !end) { showShareError('Fill in all fields.'); return; }
   showShareError('');
+  const byLine = `Requested by ${name || 'visitor'}.`;
   pendingSlots = [{
     title: title + (name ? ` (with ${name})` : ''),
     start: `${date}T${start}:00`,
     end:   `${date}T${end}:00`,
-    description: `Requested by ${name || 'visitor'}.`,
+    description: desc ? `${desc}\n\n${byLine}` : byLine,
   }];
   if (name) document.getElementById('attendee-name').value = name;
   renderShareProposals();

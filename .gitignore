@@ -12,3 +12,5 @@ Thumbs.db
 # Local env / secrets (just in case)
 .env
 *.local
+.vercel
+.env*

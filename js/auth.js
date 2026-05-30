@@ -42,11 +42,40 @@ function _silentRefresh() {
   });
 }
 
+// ── REDIRECT AUTH (popup-blocked fallback) ─────────────────
+// Saves view state, then redirects the whole page to Google's auth endpoint.
+// Google redirects back with #access_token in the hash — handled in initGoogleAuth.
+function startGoogleAuthRedirect() {
+  if (!config.clientId) return;
+  localStorage.setItem('scheduler_auth_return', JSON.stringify({
+    view: currentView, weekOffset: currentWeekOffset,
+    monthOffset: currentMonthOffset, yearOffset: currentYearOffset,
+  }));
+  const params = new URLSearchParams({
+    client_id:     config.clientId,
+    redirect_uri:  location.origin + location.pathname,
+    response_type: 'token',
+    scope:         GOOGLE_SCOPES,
+  });
+  location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+}
+
+function _handleRedirectToken() {
+  if (!location.hash || !location.hash.includes('access_token')) return false;
+  const params = new URLSearchParams(location.hash.slice(1));
+  const token  = params.get('access_token');
+  const expiry = parseInt(params.get('expires_in') || '3600', 10);
+  history.replaceState(null, '', location.pathname);
+  if (!token) return false;
+  saveToken(token, expiry);
+  return true;
+}
+
 // ── TOKEN STORAGE ──────────────────────────────────────────
-function saveToken(token) {
+function saveToken(token, expiresInSecs = 3600) {
   gapiToken = token;
   localStorage.setItem('scheduler_token', JSON.stringify({
-    token, expiry: Date.now() + 50 * 60 * 1000,
+    token, expiry: Date.now() + (Math.min(expiresInSecs, 3600) - 60) * 1000,
   }));
 }
 
@@ -70,6 +99,21 @@ function onAuthSuccess() {
 
 // ── INIT ───────────────────────────────────────────────────
 function initGoogleAuth() {
+  // Check if we just came back from a redirect-based auth (popup-blocked fallback)
+  if (_handleRedirectToken()) {
+    try {
+      const ret = JSON.parse(localStorage.getItem('scheduler_auth_return') || 'null');
+      if (ret) {
+        localStorage.removeItem('scheduler_auth_return');
+        currentWeekOffset = ret.weekOffset || 0;
+        currentMonthOffset = ret.monthOffset || 0;
+        currentYearOffset = ret.yearOffset || 0;
+      }
+    } catch {}
+    onAuthSuccess();
+    return;
+  }
+
   const loadGIS = (onload) => {
     if (window.google?.accounts?.oauth2) { onload(); return; }
     const s = document.createElement('script');
@@ -91,9 +135,12 @@ function initGoogleAuth() {
     if (resp.error === 'access_denied') {
       setCalOverlay(true, 'Access denied — check Google Cloud test users', true);
       setCalStatus(false, 'access denied');
+    } else if (resp.error === 'popup_blocked' || resp.error === 'popup_failed_to_open') {
+      // Chrome blocked the popup — offer a redirect-based sign-in instead
+      setCalOverlay(true, 'Popup blocked by browser', false, false, true);
+      setCalStatus(false, 'popup blocked');
     } else {
-      // Covers interaction_required, popup_blocked, etc. — show a tap-to-sign-in button
-      // that triggers from a real user gesture (works on Safari iOS)
+      // interaction_required, login_required, etc. — user needs to sign in
       setCalOverlay(true, 'Tap to connect Google Calendar', false, true);
       setCalStatus(false, 'sign in required');
     }
@@ -111,11 +158,12 @@ function initGoogleAuth() {
     return;
   }
 
-  requestAnimationFrame(() => setCalOverlay(true, 'Connecting to Google Calendar...'));
+  // Show connecting overlay immediately with a sign-in button visible from the start.
+  // The silent auth attempt runs in the background — if it succeeds the overlay
+  // disappears. If Chrome blocks the popup, the button is already there to click.
+  requestAnimationFrame(() => setCalOverlay(true, 'Connecting to Google Calendar...', false, true));
   loadGIS(() => {
     window._tokenClient = makeTC();
-    // Try silent first — works on desktop/Android; on Safari iOS this will fail
-    // gracefully and authCallback will show the "Tap to sign in" button instead
     window._tokenClient.requestAccessToken({ prompt: '' });
   });
 }

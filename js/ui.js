@@ -272,7 +272,7 @@ function setCalStatus(ok, msg) {
   document.getElementById('cal-status').textContent = msg;
 }
 
-function setCalOverlay(show, text = '', showRetry = false, showSignIn = false) {
+function setCalOverlay(show, text = '', showRetry = false, showSignIn = false, showRedirect = false) {
   const overlay = document.getElementById('cal-loading-overlay');
   if (!overlay) return;
   const textEl = document.getElementById('cal-loading-text');
@@ -289,8 +289,14 @@ function setCalOverlay(show, text = '', showRetry = false, showSignIn = false) {
   }
   if (showSignIn) {
     const btn = document.createElement('button');
-    btn.className = 'overlay-action-btn retry-btn'; btn.textContent = 'Sign in with Google';
+    btn.className = 'overlay-action-btn retry-btn'; btn.textContent = 'Retry';
     btn.onclick = () => window._tokenClient?.requestAccessToken({ prompt: 'consent' });
+    inner.appendChild(btn);
+  }
+  if (showRedirect) {
+    const btn = document.createElement('button');
+    btn.className = 'overlay-action-btn retry-btn'; btn.textContent = 'Retry';
+    btn.onclick = () => startGoogleAuthRedirect();
     inner.appendChild(btn);
   }
 }
