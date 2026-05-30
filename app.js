@@ -179,6 +179,9 @@ function initGoogleAuth() {
     return;
   }
 
+  // Only show overlay for the slow path
+  requestAnimationFrame(() => setCalOverlay(true, 'Connecting to Google Calendar...'));
+
   loadGIS(() => {
     window._tokenClient = makeTC();
     // Try silent first (no popup); callback handles failures
