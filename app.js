@@ -49,6 +49,11 @@ function saveConfig() {
 function showApp() {
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('app-screen').style.display   = 'flex';
+  // Show a loading placeholder in the calendar until first fetch completes
+  document.getElementById('cal-week-view').innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;padding:40px;justify-content:center;color:var(--muted);font-size:13px;">
+      <div class="spinner"></div>connecting to calendar...
+    </div>`;
   initGoogleAuth();
 }
 
