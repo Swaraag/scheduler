@@ -764,7 +764,7 @@ function renderProposals() {
   list.innerHTML = proposedEvents.map((ev, i) => {
     const state       = ev._state || 'pending';
     const colorOpts   = COLOR_OPTIONS.map(([v,l]) =>
-      `<option value="${v}" ${ev.color===v?'selected':''>${l}</option>`).join('');
+      `<option value="${v}" ${ev.color===v?'selected':''}>${l}</option>`).join('');
 
     // Determine which extra fields Claude filled
     const hasExtras = ev.location || ev.notes || ev.reminderMins || ev.color;
