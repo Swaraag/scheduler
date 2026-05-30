@@ -48,7 +48,7 @@ body::before {
 }
 
 .container {
-  width: 100%; max-width: 680px;
+  width: 100%; max-width: 960px;
   position: relative; z-index: 1;
   padding: 0 20px;
 }
@@ -242,7 +242,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .tg-day-label.today .day-num { color: var(--accent); }
 
 .tg-body {
-  display: grid; overflow-y: auto; max-height: 380px;
+  display: grid; overflow-y: auto; max-height: 520px;
   scrollbar-width: thin;
   scrollbar-color: var(--surface3) transparent;
 }
@@ -353,7 +353,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   padding: 40px; justify-content: center; color: var(--muted); font-size: 13px;
 }
 .year-grid-wrap { padding: 16px; }
-.year-months { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.year-months { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .year-month { cursor: pointer; }
 .year-month-name {
   font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700;
@@ -530,6 +530,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   background: var(--surface2); border: 1px solid var(--border2);
   border-radius: var(--rl); padding: 16px 18px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  max-width: 300px;
+  word-break: break-word;
 }
 .popup-close {
   position: absolute; top: 10px; right: 12px;
@@ -542,6 +544,22 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .popup-desc { font-size: 12px; color: var(--soft); line-height: 1.5; margin-bottom: 4px; }
 .popup-loc  { font-size: 12px; color: var(--muted); }
 .popup-overlay { position: fixed; inset: 0; z-index: 199; }
+
+/* ── COLOR SWATCHES ── */
+.settings-section { margin-bottom: 20px; }
+.settings-section-label {
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 10px;
+}
+.color-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.color-swatch {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 2px solid transparent; cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+  outline: none;
+}
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch.active { border-color: var(--text); transform: scale(1.1); }
 
 /* ── SETTINGS MODAL ── */
 .modal { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center; pointer-events: none; }

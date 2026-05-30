@@ -10,6 +10,14 @@
     (function() {
       const cfg = localStorage.getItem('scheduler_config');
       if (cfg) document.documentElement.setAttribute('data-authed', '1');
+      const theme = localStorage.getItem('scheduler_theme');
+      if (theme) {
+        try {
+          const t = JSON.parse(theme);
+          document.documentElement.style.setProperty('--accent', t.accent);
+          document.documentElement.style.setProperty('--accent-dim', t.dim);
+        } catch {}
+      }
     })();
   </script>
 </head>
@@ -184,6 +192,12 @@
   <div class="modal-box">
     <div class="modal-title">Settings</div>
     <p class="modal-desc">Your API credentials are stored locally in this browser only.</p>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Accent color</div>
+      <div class="color-swatches" id="color-swatches"></div>
+    </div>
+
     <div id="reset-confirm-area" class="hidden">
       <p class="modal-warn">This will clear your Google Client ID and Anthropic API key. You'll need to re-enter them.</p>
       <div class="modal-btns">

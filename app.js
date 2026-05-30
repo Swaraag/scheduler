@@ -42,6 +42,15 @@ window.onload = () => {
     }
   } catch { localStorage.removeItem('scheduler_token'); }
 
+  // Restore saved theme (inline script already applied it to avoid flash)
+  const savedTheme = localStorage.getItem('scheduler_theme');
+  if (savedTheme) {
+    try {
+      const t = JSON.parse(savedTheme);
+      applyTheme(t, false);
+    } catch {}
+  }
+
   const saved = localStorage.getItem('scheduler_config');
   if (saved) { config = JSON.parse(saved); showApp(); }
 };
@@ -67,12 +76,51 @@ function showApp() {
   initGoogleAuth();
 }
 
+// ── COLOR THEMES ───────────────────────────────────────────
+const THEMES = [
+  { name: 'Lime',    accent: '#c8f135', dim: '#8aaa20' },
+  { name: 'Cyan',    accent: '#22d3ee', dim: '#0e9ab0' },
+  { name: 'Purple',  accent: '#a78bfa', dim: '#7c5fc7' },
+  { name: 'Orange',  accent: '#fb923c', dim: '#c0621a' },
+  { name: 'Pink',    accent: '#f472b6', dim: '#bb3f88' },
+  { name: 'Blue',    accent: '#60a5fa', dim: '#2d76d4' },
+  { name: 'Emerald', accent: '#34d399', dim: '#17a068' },
+  { name: 'Red',     accent: '#f87171', dim: '#c73e3e' },
+];
+
+function applyTheme(theme, save = true) {
+  document.documentElement.style.setProperty('--accent', theme.accent);
+  document.documentElement.style.setProperty('--accent-dim', theme.dim);
+  if (save) localStorage.setItem('scheduler_theme', JSON.stringify({ accent: theme.accent, dim: theme.dim }));
+  renderSwatches();
+}
+
+function renderSwatches() {
+  const container = document.getElementById('color-swatches');
+  if (!container) return;
+  const saved = localStorage.getItem('scheduler_theme');
+  const activeAccent = saved ? JSON.parse(saved).accent : '#c8f135';
+  container.innerHTML = THEMES.map(t => `
+    <button class="color-swatch ${t.accent === activeAccent ? 'active' : ''}"
+      style="background:${t.accent}"
+      title="${t.name}"
+      data-accent="${t.accent}"
+      data-dim="${t.dim}"></button>
+  `).join('');
+  container.onclick = (e) => {
+    const btn = e.target.closest('.color-swatch');
+    if (!btn) return;
+    applyTheme({ accent: btn.dataset.accent, dim: btn.dataset.dim });
+  };
+}
+
 // ── SETTINGS MODAL ─────────────────────────────────────────
 function openSettings() {
   document.getElementById('settings-modal').classList.remove('hidden');
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('reset-confirm-area').classList.add('hidden');
   document.getElementById('reset-initial-area').classList.remove('hidden');
+  renderSwatches();
 }
 function closeSettings() {
   document.getElementById('settings-modal').classList.add('hidden');
@@ -565,7 +613,7 @@ function _renderPopup(data, cx, cy) {
   // Position near click, keep on screen
   const vw = window.innerWidth, vh = window.innerHeight;
   let   left = cx + 12, top = cy + 12;
-  if (left + 320 > vw - 10) left = cx - 332;
+  if (left + 300 > vw - 10) left = cx - 312;
   if (top  + 160 > vh - 10) top  = cy - 172;
   popup.style.left = `${Math.max(10, left)}px`;
   popup.style.top  = `${Math.max(10, top)}px`;
