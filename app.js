@@ -24,12 +24,14 @@ let gapiToken         = null;
 let recognition       = null;
 let isRecording       = false;
 let uploadedImage     = null;
-let calEvents7        = [];   // fast: next 7 days
+let calEvents7        = [];   // fast: next 7 days, merged across all enabled calendars
 let calEventsYear     = null; // null = still loading
 let proposedEvents    = [];
 let selectedProposals = new Set();
 let currentView       = 'week';
 let currentDayDate    = new Date(); // date shown in day view
+let allCalendars      = [];   // { id, summary, primary, backgroundColor }
+let enabledCalendars  = new Set(); // calendar IDs to include in fetches
 
 // ── INIT ───────────────────────────────────────────────────
 window.onload = () => {
@@ -116,11 +118,44 @@ function renderSwatches() {
 
 // ── SETTINGS MODAL ─────────────────────────────────────────
 function openSettings() {
-  document.getElementById('settings-modal').classList.remove('hidden');
+  const modal = document.getElementById('settings-modal');
+  if (!modal.classList.contains('hidden')) { closeSettings(); return; }
+  modal.classList.remove('hidden');
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('reset-confirm-area').classList.add('hidden');
   document.getElementById('reset-initial-area').classList.remove('hidden');
   renderSwatches();
+  renderCalendarToggles();
+}
+
+function renderCalendarToggles() {
+  const section = document.getElementById('calendars-section');
+  const container = document.getElementById('calendar-toggles');
+  if (!allCalendars.length) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  container.innerHTML = allCalendars.map(c => {
+    const checked = enabledCalendars.has(c.id);
+    const dot     = c.backgroundColor || 'var(--accent)';
+    return `<div class="cal-toggle-row" onclick="toggleCalendar('${c.id}', ${!checked})">
+      <span class="cal-toggle-dot" style="background:${dot}"></span>
+      <span class="cal-toggle-name">${c.summary || c.id}${c.primary ? ' <span class="cal-primary-badge">primary</span>' : ''}</span>
+      <span class="cal-toggle-pill ${checked ? 'on' : ''}">
+        <span class="cal-toggle-thumb"></span>
+      </span>
+    </div>`;
+  }).join('');
+}
+
+function toggleCalendar(id, enabled) {
+  if (enabled) enabledCalendars.add(id);
+  else         enabledCalendars.delete(id);
+  // Always keep at least one calendar enabled
+  if (enabledCalendars.size === 0) enabledCalendars.add(id);
+  localStorage.setItem('scheduler_enabled_cals', JSON.stringify([...enabledCalendars]));
+  renderCalendarToggles();
+  fetchEvents7();
+  fetchEventsYear();
 }
 function closeSettings() {
   document.getElementById('settings-modal').classList.add('hidden');
@@ -158,23 +193,42 @@ function loadSavedToken() {
 function onAuthSuccess() {
   setCalOverlay(false);
   setCalStatus(true, 'calendar connected');
-  fetchCalendarName();
-  fetchEvents7();
-  fetchEventsYear();
+  fetchCalendarList().then(() => {
+    fetchEvents7();
+    fetchEventsYear();
+  });
 }
 
-async function fetchCalendarName() {
+async function fetchCalendarList() {
   if (!gapiToken) return;
   try {
-    const res  = await fetch(`${CAL_API}/calendars/primary`, {
+    const res  = await fetch(`${CAL_API}/users/me/calendarList?maxResults=250`, {
       headers: { Authorization: `Bearer ${gapiToken}` }
     });
     if (!res.ok) return;
     const data = await res.json();
-    let name = data.summary || data.id || '';
-    if (name.includes('@')) name = name.split('@')[0];
-    if (name) {
-      document.querySelectorAll('.wordmark').forEach(el => {
+    allCalendars = (data.items || []).filter(c => c.accessRole !== 'freeBusyReader');
+
+    // Restore enabled set from localStorage, defaulting to primary only
+    const saved = localStorage.getItem('scheduler_enabled_cals');
+    if (saved) {
+      enabledCalendars = new Set(JSON.parse(saved));
+      // Prune any IDs that no longer exist
+      enabledCalendars.forEach(id => {
+        if (!allCalendars.find(c => c.id === id)) enabledCalendars.delete(id);
+      });
+    } else {
+      // Default: enable primary calendar only
+      const primary = allCalendars.find(c => c.primary);
+      if (primary) enabledCalendars.add(primary.id);
+    }
+
+    // Set wordmark from primary calendar name
+    const primary = allCalendars.find(c => c.primary);
+    if (primary) {
+      let name = primary.summary || primary.id || '';
+      if (name.includes('@')) name = name.split('@')[0];
+      if (name) document.querySelectorAll('.wordmark').forEach(el => {
         el.textContent = `${name}'s Schedule`;
       });
     }
@@ -276,16 +330,33 @@ function setCalOverlay(show, text = '', showRetry = false, showSignIn = false) {
 }
 
 // ── CALENDAR FETCH ─────────────────────────────────────────
+function _calIds() {
+  // Which calendars to fetch — fall back to primary if nothing selected
+  const ids = allCalendars.filter(c => enabledCalendars.has(c.id)).map(c => c.id);
+  if (ids.length === 0) {
+    const primary = allCalendars.find(c => c.primary);
+    return primary ? [primary.id] : ['primary'];
+  }
+  return ids;
+}
+
+async function _fetchCalEvents(calId, params) {
+  const url = `${CAL_API}/calendars/${encodeURIComponent(calId)}/events?${params}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${gapiToken}` } });
+  if (!res.ok) return [];
+  const d = await res.json();
+  return (d.items || []).filter(e => e.start).map(e => ({ ...e, _calId: calId }));
+}
+
 async function fetchEvents7() {
   if (!gapiToken) return;
   try {
-    const now = new Date().toISOString();
-    const end = new Date(Date.now() + 7 * 86_400_000).toISOString();
-    const url = `${CAL_API}/calendars/primary/events?timeMin=${now}&timeMax=${end}&singleEvents=true&orderBy=startTime&maxResults=50`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${gapiToken}` } });
-    if (!res.ok) throw new Error();
-    const d   = await res.json();
-    calEvents7 = (d.items || []).filter(e => e.start);
+    const now    = new Date().toISOString();
+    const end    = new Date(Date.now() + 7 * 86_400_000).toISOString();
+    const params = `timeMin=${now}&timeMax=${end}&singleEvents=true&orderBy=startTime&maxResults=50`;
+    const results = await Promise.all(_calIds().map(id => _fetchCalEvents(id, params)));
+    calEvents7 = results.flat().sort((a, b) =>
+      (a.start.dateTime || a.start.date).localeCompare(b.start.dateTime || b.start.date));
     renderCurrentView();
   } catch { setCalStatus(false, 'calendar error'); }
 }
@@ -297,13 +368,10 @@ async function fetchEventsYear() {
     const start  = now.toISOString();
     const endD   = new Date(now); endD.setFullYear(endD.getFullYear() + 1);
     const end    = endD.toISOString();
-    // Google max 2500 per request — good enough for a year
-    const url    = `${CAL_API}/calendars/primary/events?timeMin=${start}&timeMax=${end}&singleEvents=true&orderBy=startTime&maxResults=2500`;
-    const res    = await fetch(url, { headers: { Authorization: `Bearer ${gapiToken}` } });
-    if (!res.ok) throw new Error();
-    const d      = await res.json();
-    calEventsYear = (d.items || []).filter(e => e.start);
-    // If user is already on year view, render it
+    const params = `timeMin=${start}&timeMax=${end}&singleEvents=true&orderBy=startTime&maxResults=2500`;
+    const results = await Promise.all(_calIds().map(id => _fetchCalEvents(id, params)));
+    calEventsYear = results.flat().sort((a, b) =>
+      (a.start.dateTime || a.start.date).localeCompare(b.start.dateTime || b.start.date));
     if (currentView === 'year') renderYearView();
   } catch { calEventsYear = []; if (currentView === 'year') renderYearView(); }
 }
@@ -428,7 +496,7 @@ function eventBlock(ev, isProposed) {
   const top    = Math.max(0, startH - WEEK_START_HOUR) * HOUR_PX;
   const height = Math.max(18, (endH - startH) * HOUR_PX);
   const title  = ev.summary || ev.title || 'Event';
-  const data   = encodeURIComponent(JSON.stringify({ title, start: start.toISOString(), end: end.toISOString(), desc: ev.description || '', loc: ev.location || '' }));
+  const data   = encodeURIComponent(JSON.stringify({ id: ev.id || '', calId: ev._calId || 'primary', title, start: start.toISOString(), end: end.toISOString(), desc: ev.description || '', loc: ev.location || '' }));
   return `<div class="tg-event${isProposed?' proposed':''}" style="top:${top}px;height:${height}px" onclick="showEventPopup(event,'${data}')">
     <div class="tg-event-title">${title}</div>
   </div>`;
@@ -495,7 +563,7 @@ function renderMonthView(extra = []) {
   const cellsHtml = cells.map(c => {
     if (c.empty) return `<div class="month-cell other-month"></div>`;
     const pills = c.events.slice(0,3).map(e =>
-      `<span class="month-pill" onclick="event.stopPropagation();showEventPopupFromEl(event,${JSON.stringify(JSON.stringify({title:e.summary||'Event',start:e.start.dateTime||e.start.date,end:e.end?.dateTime||e.end?.date||'',desc:e.description||'',loc:e.location||''}))})">${e.summary||'Event'}</span>`
+      `<span class="month-pill" onclick="event.stopPropagation();showEventPopupFromEl(event,${JSON.stringify(JSON.stringify({id:e.id||'',calId:e._calId||'primary',title:e.summary||'Event',start:e.start.dateTime||e.start.date,end:e.end?.dateTime||e.end?.date||'',desc:e.description||'',loc:e.location||''}))})">${e.summary||'Event'}</span>`
     ).join('');
     const propPills = c.proposed.map(e =>
       `<span class="month-pill proposed">${e.title}</span>`
@@ -576,11 +644,18 @@ function showEventPopupFromEl(mouseEvent, jsonStr) {
   _renderPopup(data, mouseEvent.clientX, mouseEvent.clientY);
 }
 
+let _popupEventData = null; // tracks the event currently shown in the popup
+
 function _renderPopup(data, cx, cy) {
+  _popupEventData = data;
   const popup = document.getElementById('event-popup');
+
+  // Reset to read view
+  document.getElementById('popup-read-view').classList.remove('hidden');
+  document.getElementById('popup-edit-view').classList.add('hidden');
+
   document.getElementById('popup-title').textContent = data.title || 'Event';
 
-  // Format: "Mon, Jun 1  2:00 – 3:00 PM"
   const fmtDate = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
@@ -595,33 +670,120 @@ function _renderPopup(data, cx, cy) {
     const dateLabel = fmtDate(data.start);
     const startTime = fmtTime(data.start);
     const endTime   = fmtTime(data.end);
-    if (startTime && endTime) {
-      timeStr = `${dateLabel}  ·  ${startTime} – ${endTime}`;
-    } else if (startTime) {
-      timeStr = `${dateLabel}  ·  ${startTime}`;
-    } else {
-      timeStr = dateLabel;
-    }
+    if (startTime && endTime)  timeStr = `${dateLabel}  ·  ${startTime} – ${endTime}`;
+    else if (startTime)        timeStr = `${dateLabel}  ·  ${startTime}`;
+    else                       timeStr = dateLabel;
   }
   document.getElementById('popup-time').textContent = timeStr;
   document.getElementById('popup-desc').textContent = data.desc || '';
   document.getElementById('popup-loc').textContent  = data.loc  ? `📍 ${data.loc}` : '';
+
+  // Show edit/delete only for real GCal events (have an id)
+  const actionsEl = document.getElementById('popup-actions');
+  if (data.id) {
+    actionsEl.innerHTML = `
+      <button class="popup-edit-btn"   onclick="openEventEdit()">Edit</button>
+      <button class="popup-delete-btn" onclick="deleteEvent()">Delete</button>`;
+  } else {
+    actionsEl.innerHTML = '';
+  }
 
   popup.classList.remove('hidden');
   document.getElementById('popup-overlay').classList.remove('hidden');
 
   // Position near click, keep on screen
   const vw = window.innerWidth, vh = window.innerHeight;
-  let   left = cx + 12, top = cy + 12;
-  if (left + 300 > vw - 10) left = cx - 312;
-  if (top  + 160 > vh - 10) top  = cy - 172;
+  let left = cx + 12, top = cy + 12;
+  if (left + 320 > vw - 10) left = cx - 332;
+  if (top  + 220 > vh - 10) top  = cy - 232;
   popup.style.left = `${Math.max(10, left)}px`;
   popup.style.top  = `${Math.max(10, top)}px`;
+}
+
+function openEventEdit() {
+  if (!_popupEventData) return;
+  const d = _popupEventData;
+  document.getElementById('popup-read-view').classList.add('hidden');
+  document.getElementById('popup-edit-view').classList.remove('hidden');
+
+  document.getElementById('popup-edit-title').value      = d.title || '';
+  document.getElementById('popup-edit-start-date').value = d.start ? d.start.slice(0,10) : '';
+  document.getElementById('popup-edit-start-time').value = d.start && d.start.includes('T') ? d.start.slice(11,16) : '';
+  document.getElementById('popup-edit-end-date').value   = d.end   ? d.end.slice(0,10)   : '';
+  document.getElementById('popup-edit-end-time').value   = d.end   && d.end.includes('T') ? d.end.slice(11,16)   : '';
+}
+
+function cancelEventEdit() {
+  document.getElementById('popup-read-view').classList.remove('hidden');
+  document.getElementById('popup-edit-view').classList.add('hidden');
+}
+
+async function saveEventEdit() {
+  if (!_popupEventData?.id) return;
+  const id        = _popupEventData.id;
+  const calId     = _popupEventData.calId || 'primary';
+  const title     = document.getElementById('popup-edit-title').value.trim();
+  const startDate = document.getElementById('popup-edit-start-date').value;
+  const startTime = document.getElementById('popup-edit-start-time').value;
+  const endDate   = document.getElementById('popup-edit-end-date').value;
+  const endTime   = document.getElementById('popup-edit-end-time').value;
+  if (!title || !startDate || !startTime || !endDate || !endTime) {
+    showToast('Fill in all fields', 'error'); return;
+  }
+  const tz    = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const patch = {
+    summary: title,
+    start:   { dateTime: `${startDate}T${startTime}:00`, timeZone: tz },
+    end:     { dateTime: `${endDate}T${endTime}:00`,     timeZone: tz },
+  };
+  try {
+    const res = await fetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events/${id}`, {
+      method:  'PATCH',
+      headers: { Authorization: `Bearer ${gapiToken}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify(patch),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    closeEventPopup();
+    await fetchEvents7();
+    showToast('Event updated', 'success');
+  } catch (e) { showToast('Update failed: ' + e.message, 'error'); }
+}
+
+async function deleteEvent() {
+  if (!_popupEventData?.id) return;
+  const id = _popupEventData.id;
+  const actionsEl = document.getElementById('popup-actions');
+  actionsEl.innerHTML = `
+    <span class="popup-delete-confirm-text">Delete this event?</span>
+    <button class="popup-edit-btn"   onclick="restorePopupActions()">Cancel</button>
+    <button class="popup-delete-btn" onclick="confirmDeleteEvent('${id}')">Yes, delete</button>`;
+}
+
+function restorePopupActions() {
+  const actionsEl = document.getElementById('popup-actions');
+  actionsEl.innerHTML = `
+    <button class="popup-edit-btn"   onclick="openEventEdit()">Edit</button>
+    <button class="popup-delete-btn" onclick="deleteEvent()">Delete</button>`;
+}
+
+async function confirmDeleteEvent(id) {
+  const calId = _popupEventData?.calId || 'primary';
+  try {
+    const res = await fetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events/${id}`, {
+      method:  'DELETE',
+      headers: { Authorization: `Bearer ${gapiToken}` },
+    });
+    if (!res.ok && res.status !== 204) throw new Error(await res.text());
+    closeEventPopup();
+    await fetchEvents7();
+    showToast('Event deleted', 'success');
+  } catch (e) { showToast('Delete failed: ' + e.message, 'error'); }
 }
 
 function closeEventPopup() {
   document.getElementById('event-popup').classList.add('hidden');
   document.getElementById('popup-overlay').classList.add('hidden');
+  _popupEventData = null;
 }
 
 // Close popup when user scrolls anything
@@ -813,13 +975,33 @@ function renderProposals() {
     ['graphite','⬛ Graphite'],
   ];
 
+  // Calendar options for the per-proposal selector
+  const primaryId = (allCalendars.find(c => c.primary) || allCalendars[0] || {}).id || 'primary';
+  const calOpts = allCalendars.length > 1
+    ? allCalendars.map(c =>
+        `<option value="${c.id}">${c.summary || c.id}</option>`).join('')
+    : '';
+
   list.innerHTML = proposedEvents.map((ev, i) => {
     const state       = ev._state || 'pending';
+    // Default new proposals to the primary calendar
+    if (!ev._calendarId) ev._calendarId = primaryId;
     const colorOpts   = COLOR_OPTIONS.map(([v,l]) =>
       `<option value="${v}" ${ev.color===v?'selected':''}>${l}</option>`).join('');
 
     // Determine which extra fields Claude filled
     const hasExtras = ev.location || ev.notes || ev.reminderMins || ev.color;
+
+    const calPickerRow = calOpts ? `
+          <div class="extra-field-row">
+            <span class="extra-field-label">Calendar</span>
+            <select class="extra-field-select"
+              onchange="updateProposal(${i},'_calendarId',this.value)">
+              ${allCalendars.map(c =>
+                `<option value="${c.id}" ${ev._calendarId===c.id?'selected':''}>${c.summary||c.id}</option>`
+              ).join('')}
+            </select>
+          </div>` : '';
 
     return `
     <div class="event-card ${state}" id="card-${i}">
@@ -858,6 +1040,7 @@ function renderProposals() {
         </button>
 
         <div class="extra-fields ${hasExtras?'open':''}" id="extras-${i}">
+          ${calPickerRow}
           <div class="extra-field-row">
             <span class="extra-field-label">Location</span>
             <input class="extra-field-input" type="text" placeholder="e.g. ELH 100 or Gym"
@@ -967,7 +1150,8 @@ async function confirmEvents() {
       const COLOR_MAP = { tomato:'11',flamingo:'4',tangerine:'6',banana:'5',sage:'2',basil:'10',peacock:'7',blueberry:'9',lavender:'1',grape:'3',graphite:'8' };
       if (ev.color && COLOR_MAP[ev.color]) gcalBody.colorId = COLOR_MAP[ev.color];
 
-      const res = await fetch(`${CAL_API}/calendars/primary/events`, {
+      const targetCal = ev._calendarId || 'primary';
+      const res = await fetch(`${CAL_API}/calendars/${encodeURIComponent(targetCal)}/events`, {
         method:  'POST',
         headers: { Authorization: `Bearer ${gapiToken}`, 'Content-Type': 'application/json' },
         body:    JSON.stringify(gcalBody),

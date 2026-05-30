@@ -180,10 +180,35 @@
 <!-- Event detail popup -->
 <div id="event-popup" class="event-popup hidden">
   <button class="popup-close" onclick="closeEventPopup()">×</button>
-  <div class="popup-title" id="popup-title"></div>
-  <div class="popup-time"  id="popup-time"></div>
-  <div class="popup-desc"  id="popup-desc"></div>
-  <div class="popup-loc"   id="popup-loc"></div>
+
+  <!-- Read view -->
+  <div id="popup-read-view">
+    <div class="popup-title" id="popup-title"></div>
+    <div class="popup-time"  id="popup-time"></div>
+    <div class="popup-desc"  id="popup-desc"></div>
+    <div class="popup-loc"   id="popup-loc"></div>
+    <div class="popup-actions" id="popup-actions"></div>
+  </div>
+
+  <!-- Edit view (hidden until Edit clicked) -->
+  <div id="popup-edit-view" class="hidden">
+    <div class="popup-edit-label">Title</div>
+    <input id="popup-edit-title" type="text" class="popup-edit-input" />
+    <div class="popup-edit-label" style="margin-top:8px">Start</div>
+    <div class="popup-edit-dt-row">
+      <input id="popup-edit-start-date" type="date" class="popup-edit-dt" />
+      <input id="popup-edit-start-time" type="time" class="popup-edit-dt" />
+    </div>
+    <div class="popup-edit-label" style="margin-top:8px">End</div>
+    <div class="popup-edit-dt-row">
+      <input id="popup-edit-end-date" type="date" class="popup-edit-dt" />
+      <input id="popup-edit-end-time" type="time" class="popup-edit-dt" />
+    </div>
+    <div class="popup-edit-actions">
+      <button class="popup-save-btn" onclick="saveEventEdit()">Save</button>
+      <button class="popup-cancel-btn" onclick="cancelEventEdit()">Cancel</button>
+    </div>
+  </div>
 </div>
 <div id="popup-overlay" class="popup-overlay hidden" onclick="closeEventPopup()"></div>
 
@@ -196,6 +221,11 @@
     <div class="settings-section">
       <div class="settings-section-label">Accent color</div>
       <div class="color-swatches" id="color-swatches"></div>
+    </div>
+
+    <div class="settings-section" id="calendars-section" style="display:none">
+      <div class="settings-section-label">Calendars</div>
+      <div id="calendar-toggles"></div>
     </div>
 
     <div id="reset-confirm-area" class="hidden">
@@ -213,9 +243,11 @@
     </div>
   </div>
 </div>
-<div id="modal-overlay" class="popup-overlay hidden" onclick="closeSettings()"></div>
-
 <div class="toast" id="toast"></div>
-<script src="app.js"></script>
+<script src="js/state.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/views.js"></script>
+<script src="js/proposals.js"></script>
+<script src="js/ui.js"></script>
 </body>
 </html>

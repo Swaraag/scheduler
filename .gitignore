@@ -1,0 +1,14 @@
+# Claude Code context — keep out of repo
+CLAUDE.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Local env / secrets (just in case)
+.env
+*.local

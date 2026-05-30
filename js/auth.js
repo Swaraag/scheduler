@@ -1,0 +1,134 @@
+// Google auth, calendar list, and event fetching — all "talking to Google"
+
+function saveToken(token) {
+  gapiToken = token;
+  localStorage.setItem('scheduler_token', JSON.stringify({
+    token, expiry: Date.now() + 50 * 60 * 1000,
+  }));
+}
+
+function loadSavedToken() {
+  try {
+    const saved = localStorage.getItem('scheduler_token');
+    if (!saved) return false;
+    const { token, expiry } = JSON.parse(saved);
+    if (Date.now() < expiry && token) { gapiToken = token; return true; }
+    localStorage.removeItem('scheduler_token');
+  } catch { localStorage.removeItem('scheduler_token'); }
+  return false;
+}
+
+function onAuthSuccess() {
+  setCalOverlay(false);
+  setCalStatus(true, 'calendar connected');
+  fetchCalendarList().then(() => { fetchEvents7(); fetchEventsYear(); });
+}
+
+function initGoogleAuth() {
+  const loadGIS = (onload) => {
+    if (window.google?.accounts?.oauth2) { onload(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onload = onload;
+    s.onerror = () => { setCalOverlay(true, 'Failed to load Google auth', true); setCalStatus(false, 'network error'); };
+    document.head.appendChild(s);
+  };
+
+  const authCallback = (resp) => {
+    if (!resp.error) { saveToken(resp.access_token); onAuthSuccess(); return; }
+    if (resp.error === 'access_denied') {
+      setCalOverlay(true, 'Access denied — check Google Cloud test users', true);
+      setCalStatus(false, 'access denied');
+    } else {
+      setCalOverlay(true, 'Tap to sign in with Google', false, true);
+    }
+  };
+
+  const makeTC = () => google.accounts.oauth2.initTokenClient({
+    client_id: config.clientId, scope: GOOGLE_SCOPES, callback: authCallback,
+  });
+
+  if (loadSavedToken()) {
+    onAuthSuccess();
+    loadGIS(() => { window._tokenClient = makeTC(); });
+    return;
+  }
+
+  requestAnimationFrame(() => setCalOverlay(true, 'Connecting to Google Calendar...'));
+  loadGIS(() => {
+    window._tokenClient = makeTC();
+    window._tokenClient.requestAccessToken({ prompt: '' });
+  });
+}
+
+async function fetchCalendarList() {
+  if (!gapiToken) return;
+  try {
+    const res  = await fetch(`${CAL_API}/users/me/calendarList?maxResults=250`, {
+      headers: { Authorization: `Bearer ${gapiToken}` },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    allCalendars = (data.items || []).filter(c => c.accessRole !== 'freeBusyReader');
+
+    const saved = localStorage.getItem('scheduler_enabled_cals');
+    if (saved) {
+      enabledCalendars = new Set(JSON.parse(saved));
+      enabledCalendars.forEach(id => { if (!allCalendars.find(c => c.id === id)) enabledCalendars.delete(id); });
+    } else {
+      const primary = allCalendars.find(c => c.primary);
+      if (primary) enabledCalendars.add(primary.id);
+    }
+
+    const primary = allCalendars.find(c => c.primary);
+    if (primary) {
+      let name = primary.summary || primary.id || '';
+      if (name.includes('@')) name = name.split('@')[0];
+      if (name) document.querySelectorAll('.wordmark').forEach(el => { el.textContent = `${name}'s Schedule`; });
+    }
+  } catch {}
+}
+
+function _calIds() {
+  const ids = allCalendars.filter(c => enabledCalendars.has(c.id)).map(c => c.id);
+  if (ids.length === 0) {
+    const primary = allCalendars.find(c => c.primary);
+    return primary ? [primary.id] : ['primary'];
+  }
+  return ids;
+}
+
+async function _fetchCalEvents(calId, params) {
+  const res = await fetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events?${params}`, {
+    headers: { Authorization: `Bearer ${gapiToken}` },
+  });
+  if (!res.ok) return [];
+  const d = await res.json();
+  return (d.items || []).filter(e => e.start).map(e => ({ ...e, _calId: calId }));
+}
+
+async function fetchEvents7() {
+  if (!gapiToken) return;
+  try {
+    const now    = new Date().toISOString();
+    const end    = new Date(Date.now() + 7 * 86_400_000).toISOString();
+    const params = `timeMin=${now}&timeMax=${end}&singleEvents=true&orderBy=startTime&maxResults=50`;
+    const results = await Promise.all(_calIds().map(id => _fetchCalEvents(id, params)));
+    calEvents7 = results.flat().sort((a, b) =>
+      (a.start.dateTime || a.start.date).localeCompare(b.start.dateTime || b.start.date));
+    renderCurrentView();
+  } catch { setCalStatus(false, 'calendar error'); }
+}
+
+async function fetchEventsYear() {
+  if (!gapiToken) return;
+  try {
+    const now = new Date(); now.setMonth(0, 1); now.setHours(0,0,0,0);
+    const endD = new Date(now); endD.setFullYear(endD.getFullYear() + 1);
+    const params = `timeMin=${now.toISOString()}&timeMax=${endD.toISOString()}&singleEvents=true&orderBy=startTime&maxResults=2500`;
+    const results = await Promise.all(_calIds().map(id => _fetchCalEvents(id, params)));
+    calEventsYear = results.flat().sort((a, b) =>
+      (a.start.dateTime || a.start.date).localeCompare(b.start.dateTime || b.start.date));
+    if (currentView === 'year') renderYearView();
+  } catch { calEventsYear = []; if (currentView === 'year') renderYearView(); }
+}
