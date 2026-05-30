@@ -17,6 +17,11 @@
   --rl:         12px;
 }
 
+/* ── FLASH PREVENTION ── */
+/* Applied before JS runs via inline <script> in <head> */
+[data-authed="1"] #setup-screen { display: none !important; }
+[data-authed="1"] #app-screen   { display: flex !important; }
+
 /* ── RESET ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
