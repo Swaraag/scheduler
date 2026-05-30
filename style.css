@@ -716,9 +716,66 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .toast.success { border-color: var(--confirm); color: var(--confirm); }
 .toast.error   { border-color: var(--red); color: var(--red); }
 
-@media (max-width: 480px) {
-  .container { padding: 0 12px; }
+@media (max-width: 600px) {
+  .container { padding: 0 10px; }
+
+  /* Hide week pill — week view is unusable at this width */
+  #pill-week { display: none; }
+
+  /* Tighter header */
+  #app-screen { gap: 10px; padding-top: 14px; }
+  .app-header { padding-bottom: 2px; }
+  .wordmark { font-size: 11px; }
+  #cal-status { display: none; }
+
+  /* Pill switcher */
+  .cal-pill { padding: 6px 10px; font-size: 10px; }
+  .today-btn { padding: 6px 10px; font-size: 10px; }
+
+  /* Calendar container — reduce height so input area is visible without scrolling */
+  .tg-body { max-height: 340px; }
+
+  /* Day-view header: no need to click column to switch view */
+  .tg-day-label { padding: 8px 4px; }
+  .tg-day-label .day-num { font-size: 13px; }
+
+  /* Nav corner buttons slightly larger touch targets */
+  .tg-nav-btn { padding: 4px 8px; font-size: 20px; }
+
+  /* Month view cells — reduce min-height, smaller date number */
+  .month-cell { min-height: 52px; padding: 4px; }
+  .month-cell-num { font-size: 10px; }
+  .month-pill { font-size: 8px; padding: 1px 3px; }
+
+  /* Year view */
   .year-months { grid-template-columns: repeat(2, 1fr); }
+  .year-grid-wrap { padding: 10px; }
+
+  /* Mic button — slightly smaller */
+  .mic-center-btn { width: 60px; height: 60px; }
+  .mic-center-zone { padding: 4px 0; gap: 6px; }
+
+  /* Proposal date/time inputs — stack onto two lines */
+  .event-dt-group { flex-wrap: wrap; gap: 4px; }
+  .event-date-input { width: 120px; }
+  .event-time-input { width: 90px; }
+
+  /* Confirm row — stack buttons vertically */
+  .confirm-row { flex-direction: column; gap: 8px; }
+  .confirm-row .btn { width: 100%; }
+
+  /* Event popup — full-width at bottom on mobile */
+  .event-popup {
+    position: fixed; left: 10px !important; right: 10px !important;
+    bottom: 20px !important; top: auto !important;
+    max-width: none; width: auto;
+  }
+
+  /* Settings modal — full width */
+  .modal-box { width: 95%; padding: 20px 16px; }
+
+  /* Toast — wider */
+  .toast { white-space: normal; text-align: center; max-width: 90vw; }
 }
 
 /* ── REVISE AREA ── */

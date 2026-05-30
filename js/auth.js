@@ -1,5 +1,50 @@
 // Google auth, calendar list, and event fetching — all "talking to Google"
 
+// ── AUTH-AWARE FETCH ───────────────────────────────────────
+// Wraps fetch with automatic token-expiry recovery.
+// On a 401 it attempts one silent re-auth then retries the request.
+// If re-auth fails or the second attempt also 401s, shows the sign-in overlay.
+async function apiFetch(url, options = {}) {
+  const doFetch = () => fetch(url, {
+    ...options,
+    headers: { Authorization: `Bearer ${gapiToken}`, ...options.headers },
+  });
+
+  let res = await doFetch();
+  if (res.status !== 401) return res;
+
+  // Token expired — attempt silent refresh
+  const refreshed = await _silentRefresh();
+  if (!refreshed) {
+    setCalOverlay(true, 'Session expired — sign in again', false, true);
+    setCalStatus(false, 'session expired');
+    throw new Error('Session expired');
+  }
+
+  // Retry once with the new token
+  res = await doFetch();
+  if (res.status === 401) {
+    setCalOverlay(true, 'Session expired — sign in again', false, true);
+    setCalStatus(false, 'session expired');
+    throw new Error('Session expired');
+  }
+  return res;
+}
+
+function _silentRefresh() {
+  return new Promise(resolve => {
+    if (!window._tokenClient) { resolve(false); return; }
+    const prev = window._tokenClient.callback;
+    window._tokenClient.callback = (resp) => {
+      window._tokenClient.callback = prev;
+      if (resp.error) { resolve(false); return; }
+      saveToken(resp.access_token);
+      resolve(true);
+    };
+    window._tokenClient.requestAccessToken({ prompt: '' });
+  });
+}
+
 function saveToken(token) {
   gapiToken = token;
   localStorage.setItem('scheduler_token', JSON.stringify({
@@ -64,9 +109,7 @@ function initGoogleAuth() {
 async function fetchCalendarList() {
   if (!gapiToken) return;
   try {
-    const res  = await fetch(`${CAL_API}/users/me/calendarList?maxResults=250`, {
-      headers: { Authorization: `Bearer ${gapiToken}` },
-    });
+    const res  = await apiFetch(`${CAL_API}/users/me/calendarList?maxResults=250`);
     if (!res.ok) return;
     const data = await res.json();
     allCalendars = (data.items || []).filter(c => c.accessRole !== 'freeBusyReader');
@@ -99,9 +142,7 @@ function _calIds() {
 }
 
 async function _fetchCalEvents(calId, params) {
-  const res = await fetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events?${params}`, {
-    headers: { Authorization: `Bearer ${gapiToken}` },
-  });
+  const res = await apiFetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events?${params}`);
   if (!res.ok) return [];
   const d = await res.json();
   return (d.items || []).filter(e => e.start).map(e => ({ ...e, _calId: calId }));

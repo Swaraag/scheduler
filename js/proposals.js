@@ -1,5 +1,68 @@
 // Claude API, proposals UI, event popup edit/delete, calendar write, revise
 
+// ── JSON REPAIR ────────────────────────────────────────────
+function extractJsonArray(raw) {
+  // Strip markdown fences
+  let text = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/g, '').trim();
+
+  // Try straightforward parse first
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === 'object') return [parsed];
+  } catch {}
+
+  // Find the first '[' and match its closing ']', then parse that substring
+  const start = text.indexOf('[');
+  if (start !== -1) {
+    let depth = 0, end = -1;
+    for (let i = start; i < text.length; i++) {
+      if (text[i] === '[') depth++;
+      else if (text[i] === ']') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end !== -1) {
+      try {
+        const parsed = JSON.parse(text.slice(start, end + 1));
+        if (Array.isArray(parsed) && parsed.length) return parsed;
+      } catch {}
+    }
+  }
+
+  // Last resort: find all {...} objects and parse each individually
+  const objects = [];
+  let depth = 0, objStart = -1;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '{') { if (depth === 0) objStart = i; depth++; }
+    else if (text[i] === '}') {
+      depth--;
+      if (depth === 0 && objStart !== -1) {
+        try { objects.push(JSON.parse(text.slice(objStart, i + 1))); } catch {}
+        objStart = -1;
+      }
+    }
+  }
+  return objects;
+}
+
+// ── CALENDAR WRITE HELPER ──────────────────────────────────
+async function _postWithRetry(url, body, attempts = 2) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await apiFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      // 5xx → retry; anything else (including 4xx) → return immediately
+      if (res.status < 500) return res;
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+    } catch (e) {
+      if (i === attempts - 1) throw e;
+      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+}
+
 // ── CLAUDE ─────────────────────────────────────────────────
 function buildSystemPrompt() {
   const now        = new Date();
@@ -74,12 +137,11 @@ async function callClaude(messages) {
       body: JSON.stringify({ model: MODEL, max_tokens: 1000, system: buildSystemPrompt(), messages }),
     });
     if (!res.ok) { const err = await res.json(); throw new Error(err.error?.message || 'API error'); }
-    const data    = await res.json();
-    const raw     = data.content?.[0]?.text?.trim();
+    const data = await res.json();
+    const raw  = data.content?.[0]?.text?.trim();
     if (!raw) throw new Error('Empty response from Claude');
-    const cleaned = raw.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
-    proposedEvents = JSON.parse(cleaned);
-    if (!Array.isArray(proposedEvents) || proposedEvents.length === 0)
+    proposedEvents = extractJsonArray(raw);
+    if (!proposedEvents.length)
       throw new Error('No events could be scheduled. Try being more specific.');
     setLoading(false);
     renderProposals();
@@ -232,11 +294,10 @@ async function confirmEvents() {
       if (ev.color && COLOR_MAP[ev.color]) body.colorId = COLOR_MAP[ev.color];
       if (ev.recurrence) body.recurrence = [ev.recurrence];
       const targetCal = ev._calendarId || 'primary';
-      const res = await fetch(`${CAL_API}/calendars/${encodeURIComponent(targetCal)}/events`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${gapiToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const res = await _postWithRetry(
+        `${CAL_API}/calendars/${encodeURIComponent(targetCal)}/events`,
+        body
+      );
       if (!res.ok) throw new Error(await res.text());
       added++;
     } catch (e) { console.error('Failed to add:', ev.title, e); }
@@ -358,9 +419,9 @@ async function saveEventEdit() {
   if (!title || !startDate || !startTime || !endDate || !endTime) { showToast('Fill in all fields', 'error'); return; }
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   try {
-    const res = await fetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events/${id}`, {
+    const res = await apiFetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events/${id}`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${gapiToken}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         summary: title,
         start: { dateTime: `${startDate}T${startTime}:00`, timeZone: tz },
@@ -390,8 +451,8 @@ function restorePopupActions() {
 async function confirmDeleteEvent(id) {
   const calId = _popupEventData?.calId || 'primary';
   try {
-    const res = await fetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events/${id}`, {
-      method: 'DELETE', headers: { Authorization: `Bearer ${gapiToken}` },
+    const res = await apiFetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events/${id}`, {
+      method: 'DELETE',
     });
     if (!res.ok && res.status !== 204) throw new Error(await res.text());
     closeEventPopup(); await fetchEvents7(); showToast('Event deleted', 'success');

@@ -69,6 +69,7 @@ function renderDayView() {
 }
 
 function renderWeekView(extra = []) {
+  if (window.innerWidth <= 600) { switchCalView('day'); return; }
   const el    = document.getElementById('cal-week-view');
   const today = new Date(); today.setHours(0,0,0,0);
   const DAY_ABBR = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];

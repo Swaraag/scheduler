@@ -13,6 +13,16 @@ window.onload = () => {
   const savedTheme = localStorage.getItem('scheduler_theme');
   if (savedTheme) { try { applyTheme(JSON.parse(savedTheme), false); } catch {} }
 
+  // On narrow screens default to day view
+  if (window.innerWidth <= 600) currentView = 'day';
+
+  document.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey) || e.key !== 'Enter') return;
+    const active = document.activeElement;
+    if (active?.id === 'main-input')   { e.preventDefault(); handlePropose(); }
+    if (active?.id === 'revise-input') { e.preventDefault(); handleRevise(); }
+  });
+
   const saved = localStorage.getItem('scheduler_config');
   if (saved) { config = JSON.parse(saved); showApp(); }
 };
