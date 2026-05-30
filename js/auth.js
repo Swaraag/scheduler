@@ -33,15 +33,18 @@ async function apiFetch(url, options = {}) {
 
 function _silentRefresh() {
   return new Promise(resolve => {
-    if (!window._tokenClient) { resolve(false); return; }
-    const prev = window._tokenClient.callback;
-    window._tokenClient.callback = (resp) => {
-      window._tokenClient.callback = prev;
-      if (resp.error) { resolve(false); return; }
-      saveToken(resp.access_token);
-      resolve(true);
-    };
-    window._tokenClient.requestAccessToken({ prompt: '' });
+    if (!window.google?.accounts?.oauth2 || !config.clientId) { resolve(false); return; }
+    // Create a throw-away token client so we never mutate the shared _tokenClient.callback
+    const tc = google.accounts.oauth2.initTokenClient({
+      client_id: config.clientId,
+      scope:     GOOGLE_SCOPES,
+      callback:  (resp) => {
+        if (resp.error) { resolve(false); return; }
+        saveToken(resp.access_token);
+        resolve(true);
+      },
+    });
+    tc.requestAccessToken({ prompt: '' });
   });
 }
 
