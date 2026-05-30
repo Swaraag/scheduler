@@ -332,7 +332,7 @@ function buildTimeGrid(cols, mode) {
   const gridCols   = `44px repeat(${colCount}, 1fr)`;
 
   const headerCells = cols.map(c => {
-    const ds = c.date.toISOString().slice(0,10);
+    const ds = `${c.date.getFullYear()}-${String(c.date.getMonth()+1).padStart(2,'0')}-${String(c.date.getDate()).padStart(2,'0')}`;
     return `<div class="tg-day-label ${c.isToday ? 'today' : ''} clickable"
       onclick="switchCalView('day','${ds}')" title="View ${c.label}">
       ${c.label}
@@ -346,7 +346,7 @@ function buildTimeGrid(cols, mode) {
   }).join('');
 
   const dayCols = cols.map(c => {
-    const dayStr = c.date.toISOString().slice(0,10);
+    const dayStr = `${c.date.getFullYear()}-${String(c.date.getMonth()+1).padStart(2,'0')}-${String(c.date.getDate()).padStart(2,'0')}`;
     const blocks = (c.events || []).map(e => eventBlock(e, false)).join('');
     const proposed = (c.proposed || []).map((e, pi) => proposedBlock(e, e._idx !== undefined ? e._idx : pi)).join('');
     const now = new Date();
