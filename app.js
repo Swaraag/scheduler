@@ -123,11 +123,11 @@ async function fetchCalendarName() {
     });
     if (!res.ok) return;
     const data = await res.json();
-    const name = data.summary || data.id || '';
+    let name = data.summary || data.id || '';
+    if (name.includes('@')) name = name.split('@')[0];
     if (name) {
-      const first = name.split(' ')[0];
       document.querySelectorAll('.wordmark').forEach(el => {
-        el.textContent = `${first}'s Schedule`;
+        el.textContent = `${name}'s Schedule`;
       });
     }
   } catch {}
