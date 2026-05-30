@@ -1,0 +1,41 @@
+.share-screen { padding-top: 20px; }
+.share-hero { padding: 24px 0 20px; }
+.share-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; margin: 12px 0 8px; }
+.share-sub { font-size: 13px; color: var(--soft); margin: 0; }
+.share-success-icon {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: rgba(61,214,140,0.15); border: 2px solid var(--confirm);
+  color: var(--confirm); font-size: 22px;
+  display: flex; align-items: center; justify-content: center; margin: 16px 0;
+}
+
+/* Busy blocks — no text, just a colored bar */
+.tg-event.share-busy {
+  background: var(--surface3); border-left: 2px solid var(--border2);
+  cursor: default; pointer-events: none;
+}
+
+/* Month view busy dots */
+.share-busy-dots { display: flex; gap: 3px; margin-top: 3px; flex-wrap: wrap; }
+.share-busy-dot  { width: 5px; height: 5px; border-radius: 50%; background: var(--border2); }
+
+/* Tabs */
+.share-tabs { display: flex; gap: 2px; margin-bottom: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 3px; width: fit-content;
+}
+.share-tab {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  background: transparent; border: none; border-radius: 6px;
+  padding: 7px 16px; color: var(--muted); cursor: pointer; transition: all 0.15s;
+}
+.share-tab.active { background: var(--surface2); color: var(--accent); }
+
+.share-form-section { margin-top: 16px; }
+
+.share-manual-form { display: flex; flex-direction: column; gap: 12px; }
+.share-manual-row  { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.share-attendee-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.share-attendee-row .input-group { flex: 1; min-width: 180px; }

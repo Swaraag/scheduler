@@ -145,10 +145,13 @@
             </button>
             <input type="file" id="image-file-input" accept="image/*" style="display:none" onchange="handleImageUpload(event)" />
           </div>
-          <button class="propose-btn" id="propose-btn" onclick="handlePropose()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            Propose
-          </button>
+          <div class="textarea-right">
+            <button class="manual-btn" onclick="handleManualEntry()">+ Manual</button>
+            <button class="propose-btn" id="propose-btn" onclick="handlePropose()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              Propose
+            </button>
+          </div>
         </div>
       </div>
     </div>

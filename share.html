@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Schedule a meeting</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="share.css" />
+</head>
+<body>
+<div class="container" id="share-container">
+
+  <div id="main-screen" class="share-screen hidden">
+    <div class="share-hero">
+      <div class="wordmark" id="share-wordmark">Schedule a meeting</div>
+      <p class="share-sub" id="share-sub">Pick a time or describe what you'd like to schedule.</p>
+    </div>
+
+    <!-- Calendar pill switcher -->
+    <div class="cal-pill-row">
+      <div class="cal-pills">
+        <button class="cal-pill" id="pill-day"   onclick="shareNav('day')">Day</button>
+        <button class="cal-pill active" id="pill-week" onclick="shareNav('week')">Week</button>
+        <button class="cal-pill" id="pill-month" onclick="shareNav('month')">Month</button>
+      </div>
+      <button class="today-btn" onclick="shareToday()">Today</button>
+    </div>
+
+    <!-- Calendar read-only view showing busy blocks -->
+    <div id="cal-container">
+      <div id="cal-day-view"   class="cal-view hidden"></div>
+      <div id="cal-week-view"  class="cal-view"></div>
+      <div id="cal-month-view" class="cal-view hidden"></div>
+    </div>
+
+    <!-- Request form -->
+    <div class="share-form-section">
+      <div class="proposals-header">// request a time</div>
+
+      <div class="share-tabs">
+        <button class="share-tab active" id="tab-claude" onclick="switchTab('claude')">Ask Claude</button>
+        <button class="share-tab" id="tab-manual" onclick="switchTab('manual')">Pick manually</button>
+      </div>
+
+      <!-- Claude tab -->
+      <div id="pane-claude">
+        <div class="input-area" style="margin-bottom:12px">
+          <div class="textarea-wrap">
+            <textarea id="share-input" placeholder="e.g. 'Coffee chat this week, ~30 min, morning preferred'" rows="3"></textarea>
+            <div class="textarea-actions">
+              <div class="textarea-left"></div>
+              <button class="propose-btn" onclick="handleSharePropose()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                Find a time
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual tab -->
+      <div id="pane-manual" class="hidden">
+        <div class="share-manual-form">
+          <div class="input-group">
+            <span class="input-label">Event title</span>
+            <input type="text" id="manual-title" placeholder="e.g. Coffee chat" />
+          </div>
+          <div class="share-manual-row">
+            <div class="input-group" style="flex:1">
+              <span class="input-label">Date</span>
+              <input type="date" id="manual-date" />
+            </div>
+            <div class="input-group" style="flex:1">
+              <span class="input-label">Start time</span>
+              <input type="time" id="manual-start" />
+            </div>
+            <div class="input-group" style="flex:1">
+              <span class="input-label">End time</span>
+              <input type="time" id="manual-end" />
+            </div>
+          </div>
+          <div class="input-group">
+            <span class="input-label">Your name</span>
+            <input type="text" id="manual-name" placeholder="So the owner knows who's requesting" />
+          </div>
+          <button class="propose-btn" style="margin-top:8px;width:100%;justify-content:center" onclick="handleManualSharePropose()">
+            Request this time →
+          </button>
+        </div>
+      </div>
+
+      <div class="error-box" id="share-error"></div>
+    </div>
+
+    <!-- Proposed slot preview -->
+    <div id="share-proposals-section" style="display:none">
+      <div class="proposals-header">// proposed time</div>
+      <div id="share-proposals-list"></div>
+      <div class="share-attendee-row">
+        <div class="input-group" style="flex:1">
+          <span class="input-label">Your name</span>
+          <input type="text" id="attendee-name" placeholder="Your name" />
+        </div>
+        <div class="input-group" style="flex:1">
+          <span class="input-label">Your email (optional — for calendar invite)</span>
+          <input type="email" id="attendee-email" placeholder="you@email.com" />
+        </div>
+      </div>
+      <div class="confirm-row" style="margin-top:12px">
+        <button class="btn btn-confirm" onclick="confirmShareEvent()">Send Request →</button>
+        <button class="btn btn-ghost"   onclick="resetShareUI()">Cancel</button>
+      </div>
+    </div>
+
+  </div><!-- end main-screen -->
+
+  <div id="success-screen" class="share-screen hidden">
+    <div class="share-hero">
+      <div class="wordmark">Scheduler</div>
+      <div class="share-success-icon">✓</div>
+      <h2 class="share-title">Request sent!</h2>
+      <p class="share-sub" id="success-detail">The owner will receive a calendar invite and can confirm or decline.</p>
+      <button class="btn btn-ghost" style="margin-top:20px" onclick="resetShareUI()">Request another time</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="js/share.js"></script>
+</body>
+</html>

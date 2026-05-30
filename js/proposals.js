@@ -148,6 +148,26 @@ async function callClaude(messages) {
   } catch (e) { setLoading(false); showError('Error: ' + e.message); }
 }
 
+// ── MANUAL ENTRY ───────────────────────────────────────────
+function handleManualEntry() {
+  // Default to tomorrow at 9am–10am
+  const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+  const pad = n => String(n).padStart(2, '0');
+  const fmt = (date) => `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`;
+  const end = new Date(d); end.setHours(10);
+  const blank = { title: '', start: fmt(d), end: fmt(end), description: '', location: null, notes: null, reminderMins: null, color: null, recurrence: null, _state: 'pending' };
+  proposedEvents.push(blank);
+  document.getElementById('proposals-section').classList.add('visible');
+  renderProposals();
+  // Scroll to and focus the new card's title input
+  setTimeout(() => {
+    const idx = proposedEvents.length - 1;
+    const card = document.getElementById(`card-${idx}`);
+    card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card?.querySelector('.event-title-input')?.focus();
+  }, 50);
+}
+
 // ── PROPOSALS UI ───────────────────────────────────────────
 function renderProposals() {
   proposedEvents.forEach((ev, i) => { ev._idx = i; if (!ev._state) ev._state = 'pending'; });

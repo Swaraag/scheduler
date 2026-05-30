@@ -132,6 +132,29 @@ function resetConfig() {
   location.reload();
 }
 
+function copyShareLink() {
+  if (!gapiToken) { showToast('Connect your calendar first', 'error'); return; }
+  const primary = allCalendars.find(c => c.primary) || allCalendars[0];
+  if (!primary) { showToast('Calendar not loaded yet', 'error'); return; }
+  // Embed token, calendarId, owner name, anthropic key, and expiry in the hash
+  // Token expires in ~50 min so the link is short-lived
+  const payload = {
+    token:   gapiToken,
+    calId:   primary.id,
+    name:    (primary.summary || '').replace(/@.*/, '') || 'Me',
+    anthKey: config.apiKey || null,
+    expiry:  Date.now() + 48 * 60 * 1000, // 48 min (slightly under the 50-min token expiry)
+  };
+  const hash = btoa(JSON.stringify(payload));
+  const shareUrl = `${location.origin}${location.pathname.replace('index.html', '')}share.html#${hash}`;
+  navigator.clipboard.writeText(shareUrl).then(() => {
+    showToast('Share link copied — valid for ~48 min', 'success');
+  }).catch(() => {
+    // Fallback for browsers that block clipboard without HTTPS
+    prompt('Copy this link:', shareUrl);
+  });
+}
+
 function renderCalendarToggles() {
   const section   = document.getElementById('calendars-section');
   const container = document.getElementById('calendar-toggles');
