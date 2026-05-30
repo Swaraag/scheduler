@@ -3,544 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Swaraag's Scheduler</title>
+  <title>Scheduler</title>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --bg: #0a0a0a;
-      --surface: #111111;
-      --surface2: #1a1a1a;
-      --border: #222222;
-      --accent: #c8f135;
-      --accent-dim: #8aaa20;
-      --text: #f0f0f0;
-      --text-muted: #666;
-      --text-soft: #999;
-      --red: #ff4444;
-      --confirm: #3dd68c;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'DM Mono', monospace;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 40px 20px 80px;
-      position: relative;
-      overflow-x: hidden;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      top: -200px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 600px;
-      height: 600px;
-      background: radial-gradient(circle, rgba(200,241,53,0.06) 0%, transparent 70%);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .container {
-      width: 100%;
-      max-width: 640px;
-      position: relative;
-      z-index: 1;
-    }
-
-    header {
-      margin-bottom: 48px;
-      padding-top: 16px;
-    }
-
-    .wordmark {
-      font-family: 'Syne', sans-serif;
-      font-weight: 800;
-      font-size: 13px;
-      letter-spacing: 0.25em;
-      text-transform: uppercase;
-      color: var(--accent);
-    }
-
-    h1 {
-      font-family: 'Syne', sans-serif;
-      font-weight: 700;
-      font-size: clamp(28px, 6vw, 42px);
-      line-height: 1.1;
-      margin-top: 8px;
-      color: var(--text);
-    }
-
-    h1 span {
-      color: var(--accent);
-    }
-
-    .subtitle {
-      margin-top: 10px;
-      font-size: 12px;
-      color: var(--text-muted);
-      letter-spacing: 0.05em;
-    }
-
-    /* ── SETUP SCREEN ── */
-    #setup-screen {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .setup-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
-    }
-
-    .setup-card h2 {
-      font-family: 'Syne', sans-serif;
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 16px;
-    }
-
-    .step {
-      display: flex;
-      gap: 14px;
-      margin-bottom: 14px;
-      align-items: flex-start;
-    }
-
-    .step-num {
-      flex-shrink: 0;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: var(--accent);
-      color: #000;
-      font-size: 11px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: 1px;
-    }
-
-    .step-text {
-      font-size: 13px;
-      color: var(--text-soft);
-      line-height: 1.6;
-    }
-
-    .step-text code {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      padding: 1px 6px;
-      border-radius: 4px;
-      font-size: 12px;
-      color: var(--accent);
-    }
-
-    .step-text a {
-      color: var(--accent);
-      text-decoration: none;
-      border-bottom: 1px solid var(--accent-dim);
-    }
-
-    .input-group {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 16px;
-    }
-
-    .input-label {
-      font-size: 11px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
-
-    input[type="text"], input[type="password"] {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 14px;
-      color: var(--text);
-      font-family: 'DM Mono', monospace;
-      font-size: 13px;
-      width: 100%;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    input[type="text"]:focus, input[type="password"]:focus {
-      border-color: var(--accent);
-    }
-
-    input::placeholder { color: var(--text-muted); }
-
-    .btn {
-      font-family: 'Syne', sans-serif;
-      font-weight: 700;
-      font-size: 13px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      border: none;
-      border-radius: 8px;
-      padding: 13px 24px;
-      cursor: pointer;
-      transition: all 0.15s;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      color: #000;
-      width: 100%;
-      margin-top: 8px;
-    }
-
-    .btn-primary:hover { background: #d9ff40; transform: translateY(-1px); }
-    .btn-primary:active { transform: translateY(0); }
-
-    .btn-primary:disabled {
-      background: var(--border);
-      color: var(--text-muted);
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .btn-ghost {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text-soft);
-    }
-
-    .btn-ghost:hover { border-color: var(--text-soft); color: var(--text); }
-
-    .btn-danger {
-      background: transparent;
-      border: 1px solid var(--red);
-      color: var(--red);
-    }
-
-    .btn-confirm {
-      background: var(--confirm);
-      color: #000;
-      flex: 1;
-    }
-    .btn-confirm:hover { background: #4ae89e; }
-
-    /* ── MAIN APP ── */
-    #app-screen { display: none; flex-direction: column; gap: 20px; }
-
-    .status-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 16px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      font-size: 12px;
-    }
-
-    .status-dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: var(--confirm);
-      display: inline-block;
-      margin-right: 8px;
-      box-shadow: 0 0 6px var(--confirm);
-    }
-
-    .status-dot.red { background: var(--red); box-shadow: 0 0 6px var(--red); }
-
-    /* ── MIC BUTTON ── */
-    .mic-wrapper {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
-      padding: 40px 0;
-    }
-
-    .mic-btn {
-      width: 100px;
-      height: 100px;
-      border-radius: 50%;
-      border: 2px solid var(--accent);
-      background: transparent;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      position: relative;
-    }
-
-    .mic-btn:hover {
-      background: rgba(200,241,53,0.06);
-      transform: scale(1.04);
-    }
-
-    .mic-btn.recording {
-      border-color: var(--red);
-      background: rgba(255,68,68,0.08);
-      animation: pulse 1.4s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(255,68,68,0.3); }
-      50% { box-shadow: 0 0 0 18px rgba(255,68,68,0); }
-    }
-
-    .mic-icon {
-      width: 36px;
-      height: 36px;
-      fill: none;
-      stroke: var(--accent);
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-
-    .mic-btn.recording .mic-icon { stroke: var(--red); }
-
-    .mic-label {
-      font-size: 12px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
-
-    .mic-btn.recording + .mic-label + .mic-label { display: none; }
-
-    /* ── TRANSCRIPT ── */
-    .transcript-box {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 18px;
-      min-height: 80px;
-      font-size: 14px;
-      line-height: 1.7;
-      color: var(--text-soft);
-      display: none;
-    }
-
-    .transcript-box.active { display: block; }
-    .transcript-box.has-text { color: var(--text); }
-
-    /* ── PROCESS BTN ── */
-    #process-btn { display: none; }
-    #process-btn.visible { display: flex; }
-
-    /* ── LOADING ── */
-    #loading-state {
-      display: none;
-      align-items: center;
-      gap: 12px;
-      padding: 20px;
-      font-size: 13px;
-      color: var(--text-muted);
-      justify-content: center;
-    }
-
-    #loading-state.visible { display: flex; }
-
-    .spinner {
-      width: 18px; height: 18px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── PROPOSALS ── */
-    #proposals-section { display: none; }
-    #proposals-section.visible { display: block; }
-
-    .proposals-header {
-      font-family: 'Syne', sans-serif;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 14px;
-    }
-
-    .event-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px 18px;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: flex-start;
-      gap: 14px;
-      transition: border-color 0.2s;
-    }
-
-    .event-card.selected {
-      border-color: var(--accent);
-      background: rgba(200,241,53,0.03);
-    }
-
-    .event-card.selected .event-check { background: var(--accent); border-color: var(--accent); }
-    .event-card.selected .event-check::after {
-      content: '';
-      width: 6px; height: 10px;
-      border: 2px solid #000;
-      border-top: none;
-      border-left: none;
-      transform: rotate(45deg) translate(-1px,-1px);
-      display: block;
-    }
-
-    .event-check {
-      flex-shrink: 0;
-      width: 20px; height: 20px;
-      border-radius: 4px;
-      border: 1px solid var(--border);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: 2px;
-      transition: all 0.15s;
-    }
-
-    .event-info { flex: 1; }
-
-    .event-title {
-      font-family: 'Syne', sans-serif;
-      font-weight: 600;
-      font-size: 14px;
-      margin-bottom: 4px;
-    }
-
-    .event-time {
-      font-size: 12px;
-      color: var(--accent);
-      letter-spacing: 0.04em;
-    }
-
-    .event-desc {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 4px;
-      line-height: 1.5;
-    }
-
-    .confirm-row {
-      display: flex;
-      gap: 10px;
-      margin-top: 16px;
-    }
-
-    /* ── TOAST ── */
-    .toast {
-      position: fixed;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 20px;
-      font-size: 13px;
-      opacity: 0;
-      transition: all 0.3s;
-      pointer-events: none;
-      white-space: nowrap;
-      z-index: 100;
-    }
-
-    .toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-
-    .toast.success { border-color: var(--confirm); color: var(--confirm); }
-    .toast.error { border-color: var(--red); color: var(--red); }
-
-    /* ── ERROR BOX ── */
-    .error-box {
-      background: rgba(255,68,68,0.06);
-      border: 1px solid rgba(255,68,68,0.3);
-      border-radius: 8px;
-      padding: 14px 16px;
-      font-size: 13px;
-      color: #ff8888;
-      display: none;
-      line-height: 1.6;
-    }
-    .error-box.visible { display: block; }
-
-    /* ── CALENDAR PREVIEW ── */
-    .calendar-preview {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
-    }
-
-    .cal-header {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      font-size: 11px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .cal-event {
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border);
-      font-size: 12px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .cal-event:last-child { border-bottom: none; }
-    .cal-event-name { color: var(--text-soft); }
-    .cal-event-time { color: var(--text-muted); flex-shrink: 0; }
-
-    .cal-empty {
-      padding: 16px;
-      font-size: 12px;
-      color: var(--text-muted);
-      text-align: center;
-    }
-
-    @media (max-width: 480px) {
-      body { padding: 24px 16px 60px; }
-      h1 { font-size: 26px; }
-      .mic-btn { width: 86px; height: 86px; }
-    }
-  </style>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
@@ -555,45 +20,33 @@
   <div id="setup-screen">
     <div class="setup-card">
       <h2>One-time setup</h2>
-
       <div class="step">
         <div class="step-num">1</div>
         <div class="step-text">
-          Go to <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a>, create a new project (name it anything).
+          Go to <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a>, create a new project, and enable the <strong>Google Calendar API</strong>.
         </div>
       </div>
       <div class="step">
         <div class="step-num">2</div>
         <div class="step-text">
-          Enable the <strong>Google Calendar API</strong> for your project (search it in the API library).
+          Go to <strong>APIs &amp; Services → Credentials → Create Credentials → OAuth client ID</strong>. Choose <code>Web application</code>. Add your site URL under "Authorized JavaScript origins". Copy the Client ID.
         </div>
       </div>
       <div class="step">
         <div class="step-num">3</div>
         <div class="step-text">
-          Go to <strong>APIs &amp; Services → Credentials → Create Credentials → OAuth client ID</strong>. Choose <code>Web application</code>. Under "Authorized JavaScript origins" add your site URL (e.g. <code>https://yourgithub.github.io</code>). Copy the Client ID.
-        </div>
-      </div>
-      <div class="step">
-        <div class="step-num">4</div>
-        <div class="step-text">
           Get your Anthropic API key from <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>.
         </div>
       </div>
-
       <div class="input-group">
         <span class="input-label">Google OAuth Client ID</span>
         <input type="text" id="input-client-id" placeholder="xxxx.apps.googleusercontent.com" />
       </div>
-
       <div class="input-group">
         <span class="input-label">Anthropic API Key</span>
         <input type="password" id="input-api-key" placeholder="sk-ant-..." />
       </div>
-
-      <button class="btn btn-primary" id="save-config-btn" onclick="saveConfig()">
-        Save &amp; Continue →
-      </button>
+      <button class="btn btn-primary" onclick="saveConfig()">Save &amp; Continue →</button>
     </div>
   </div>
 
@@ -602,42 +55,99 @@
 
     <!-- Status bar -->
     <div class="status-bar">
-      <span><span class="status-dot" id="cal-dot"></span><span id="cal-status">connecting...</span></span>
-      <button class="btn btn-ghost" style="padding:6px 12px;font-size:11px;" onclick="resetConfig()">Reset</button>
+      <span>
+        <span class="status-dot" id="cal-dot"></span>
+        <span id="cal-status">connecting...</span>
+      </span>
+      <button class="btn btn-ghost btn-sm" onclick="resetConfig()">Reset</button>
     </div>
 
-    <!-- Upcoming events preview -->
-    <div class="calendar-preview" id="cal-preview">
+    <!-- Calendar view toggle -->
+    <div class="cal-view-toggle">
+      <button class="cal-toggle-btn active" id="toggle-list" onclick="switchCalView('list')">List</button>
+      <button class="cal-toggle-btn" id="toggle-week" onclick="switchCalView('week')">Week</button>
+    </div>
+
+    <!-- List view -->
+    <div id="cal-list-view" class="calendar-preview">
       <div class="cal-header">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2"/>
+          <line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8"  y1="2" x2="8"  y2="6"/>
+          <line x1="3"  y1="10" x2="21" y2="10"/>
+        </svg>
         upcoming events
       </div>
       <div class="cal-empty" id="cal-loading">fetching calendar...</div>
     </div>
 
-    <!-- Mic -->
-    <div class="mic-wrapper">
-      <button class="mic-btn" id="mic-btn" onclick="toggleRecording()">
-        <svg class="mic-icon" viewBox="0 0 24 24">
-          <rect x="9" y="3" width="6" height="11" rx="3"/>
-          <path d="M5 10a7 7 0 0 0 14 0"/>
-          <line x1="12" y1="17" x2="12" y2="21"/>
-          <line x1="9" y1="21" x2="15" y2="21"/>
-        </svg>
-      </button>
-      <span class="mic-label" id="mic-label">tap to speak</span>
+    <!-- Week view -->
+    <div id="cal-week-view" class="hidden">
+      <div class="week-grid" id="week-grid"></div>
     </div>
 
-    <!-- Transcript -->
+    <!-- Input mode tabs -->
+    <div class="input-tabs">
+      <button class="tab active" id="tab-voice" onclick="switchTab('voice')">Voice</button>
+      <button class="tab" id="tab-text"  onclick="switchTab('text')">Text</button>
+      <button class="tab" id="tab-image" onclick="switchTab('image')">Image</button>
+    </div>
+
+    <!-- Voice panel -->
+    <div class="input-panel" id="panel-voice">
+      <div class="mic-wrapper">
+        <button class="mic-btn" id="mic-btn" onclick="toggleRecording()">
+          <svg class="mic-icon" viewBox="0 0 24 24">
+            <rect x="9" y="3" width="6" height="11" rx="3"/>
+            <path d="M5 10a7 7 0 0 0 14 0"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+            <line x1="9"  y1="21" x2="15" y2="21"/>
+          </svg>
+        </button>
+        <span class="mic-label" id="mic-label">tap to speak</span>
+      </div>
+    </div>
+
+    <!-- Text panel -->
+    <div class="input-panel hidden" id="panel-text">
+      <div class="text-input-wrapper">
+        <textarea id="text-input" placeholder="e.g. I need to study for linear algebra for 2 hours this week, and hit the gym tomorrow morning..." rows="4"></textarea>
+        <button class="btn btn-primary" onclick="submitText()">Schedule this →</button>
+      </div>
+    </div>
+
+    <!-- Image panel -->
+    <div class="input-panel hidden" id="panel-image">
+      <div class="image-upload-wrapper" id="image-drop-zone" onclick="document.getElementById('image-file-input').click()">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <span class="upload-label">tap to upload image</span>
+        <span class="upload-hint">screenshots, photos of schedules, whiteboards, etc.</span>
+        <input type="file" id="image-file-input" accept="image/*" style="display:none" onchange="handleImageUpload(event)" />
+      </div>
+      <div class="image-preview-wrapper hidden" id="image-preview-wrapper">
+        <img id="image-preview" src="" alt="uploaded" />
+        <div class="image-actions">
+          <span id="image-filename" class="image-filename"></span>
+          <button class="btn btn-ghost btn-sm" onclick="clearImage()">Remove</button>
+        </div>
+        <textarea id="image-text-input" placeholder="Optional: add context (e.g. 'schedule these tasks around my classes')" rows="2"></textarea>
+        <button class="btn btn-primary" onclick="submitImage()">Schedule this →</button>
+      </div>
+    </div>
+
+    <!-- Transcript display -->
     <div class="transcript-box" id="transcript-box"></div>
 
     <!-- Error -->
     <div class="error-box" id="error-box"></div>
 
-    <!-- Process button -->
-    <button class="btn btn-primary" id="process-btn" onclick="processRequest()">
-      Schedule this →
-    </button>
+    <!-- Process button (voice only) -->
+    <button class="btn btn-primary" id="process-btn" onclick="processVoice()">Schedule this →</button>
 
     <!-- Loading -->
     <div id="loading-state">
@@ -651,395 +161,14 @@
       <div id="proposals-list"></div>
       <div class="confirm-row">
         <button class="btn btn-confirm" onclick="confirmEvents()">Add to Calendar ✓</button>
-        <button class="btn btn-ghost" onclick="resetToMic()">Cancel</button>
+        <button class="btn btn-ghost"   onclick="resetUI()">Cancel</button>
       </div>
     </div>
 
-  </div>
-</div>
+  </div><!-- end app-screen -->
+</div><!-- end container -->
 
 <div class="toast" id="toast"></div>
-
-<script>
-// ── CONFIG ──
-const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly';
-const CAL_API = 'https://www.googleapis.com/calendar/v3';
-
-let config = {};
-let gapiToken = null;
-let recognition = null;
-let isRecording = false;
-let transcript = '';
-let calendarEvents = [];
-let proposedEvents = [];
-let selectedProposals = new Set();
-
-// ── INIT ──
-window.onload = () => {
-  const saved = localStorage.getItem('scheduler_config');
-  if (saved) {
-    config = JSON.parse(saved);
-    showApp();
-  }
-};
-
-function saveConfig() {
-  const clientId = document.getElementById('input-client-id').value.trim();
-  const apiKey = document.getElementById('input-api-key').value.trim();
-  if (!clientId || !apiKey) { showToast('Fill in both fields', 'error'); return; }
-  config = { clientId, apiKey };
-  localStorage.setItem('scheduler_config', JSON.stringify(config));
-  showApp();
-}
-
-function resetConfig() {
-  localStorage.removeItem('scheduler_config');
-  location.reload();
-}
-
-// ── GOOGLE AUTH ──
-function showApp() {
-  document.getElementById('setup-screen').style.display = 'none';
-  document.getElementById('app-screen').style.display = 'flex';
-  initGoogleAuth();
-}
-
-function initGoogleAuth() {
-  // Load Google Identity Services
-  const script = document.createElement('script');
-  script.src = 'https://accounts.google.com/gsi/client';
-  script.onload = startAuth;
-  document.head.appendChild(script);
-}
-
-function startAuth() {
-  const tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: config.clientId,
-    scope: SCOPES,
-    callback: (resp) => {
-      if (resp.error) { setCalStatus(false, 'auth failed'); return; }
-      gapiToken = resp.access_token;
-      setCalStatus(true, 'calendar connected');
-      loadCalendarEvents();
-    }
-  });
-
-  // Request token silently first, prompt if needed
-  tokenClient.requestAccessToken({ prompt: '' });
-
-  // Save tokenClient for re-auth
-  window._tokenClient = tokenClient;
-}
-
-function setCalStatus(ok, msg) {
-  const dot = document.getElementById('cal-dot');
-  const status = document.getElementById('cal-status');
-  dot.className = 'status-dot' + (ok ? '' : ' red');
-  status.textContent = msg;
-}
-
-// ── CALENDAR ──
-async function loadCalendarEvents() {
-  if (!gapiToken) return;
-  try {
-    const now = new Date().toISOString();
-    const end = new Date(Date.now() + 7 * 86400000).toISOString();
-    const url = `${CAL_API}/calendars/primary/events?timeMin=${now}&timeMax=${end}&singleEvents=true&orderBy=startTime&maxResults=20`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${gapiToken}` } });
-    if (!res.ok) throw new Error('calendar fetch failed');
-    const data = await res.json();
-    calendarEvents = (data.items || []).filter(e => e.start);
-    renderCalPreview();
-  } catch(e) {
-    setCalStatus(false, 'calendar error');
-    console.error(e);
-  }
-}
-
-function renderCalPreview() {
-  const container = document.getElementById('cal-loading');
-  const preview = document.getElementById('cal-preview');
-
-  if (calendarEvents.length === 0) {
-    container.textContent = 'no upcoming events found';
-    return;
-  }
-
-  preview.innerHTML = `
-    <div class="cal-header">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      next 7 days (${calendarEvents.length} events)
-    </div>
-    ${calendarEvents.slice(0,6).map(e => {
-      const start = e.start.dateTime || e.start.date;
-      const d = new Date(start);
-      const label = e.start.dateTime
-        ? d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})
-        : d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-      return `<div class="cal-event"><span class="cal-event-name">${e.summary || 'Untitled'}</span><span class="cal-event-time">${label}</span></div>`;
-    }).join('')}
-    ${calendarEvents.length > 6 ? `<div class="cal-empty">+${calendarEvents.length-6} more</div>` : ''}
-  `;
-}
-
-// ── VOICE ──
-function toggleRecording() {
-  if (isRecording) stopRecording();
-  else startRecording();
-}
-
-function startRecording() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    showError('Your browser doesn\'t support voice input. Try Chrome on desktop or Android.');
-    return;
-  }
-
-  recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = 'en-US';
-
-  let finalTranscript = '';
-
-  recognition.onresult = (e) => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript + ' ';
-      else interim += e.results[i][0].transcript;
-    }
-    transcript = finalTranscript + interim;
-    showTranscript(transcript);
-  };
-
-  recognition.onerror = (e) => {
-    stopRecording();
-    if (e.error !== 'no-speech') showError('Voice error: ' + e.error);
-  };
-
-  recognition.onend = () => { if (isRecording) recognition.start(); };
-
-  recognition.start();
-  isRecording = true;
-
-  document.getElementById('mic-btn').classList.add('recording');
-  document.getElementById('mic-label').textContent = 'tap to stop';
-  hideError();
-}
-
-function stopRecording() {
-  if (recognition) { recognition.onend = null; recognition.stop(); }
-  isRecording = false;
-  document.getElementById('mic-btn').classList.remove('recording');
-  document.getElementById('mic-label').textContent = 'tap to speak';
-
-  if (transcript.trim()) {
-    const btn = document.getElementById('process-btn');
-    btn.classList.add('visible');
-  }
-}
-
-function showTranscript(text) {
-  const box = document.getElementById('transcript-box');
-  box.textContent = text;
-  box.className = 'transcript-box active' + (text ? ' has-text' : '');
-}
-
-// ── CLAUDE SCHEDULING ──
-async function processRequest() {
-  if (!transcript.trim()) { showError('Nothing was recorded.'); return; }
-  if (!gapiToken) {
-    window._tokenClient.requestAccessToken({ prompt: 'consent' });
-    return;
-  }
-
-  document.getElementById('process-btn').classList.remove('visible');
-  document.getElementById('proposals-section').classList.remove('visible');
-  setLoading(true, 'finding your free time...');
-
-  // Refresh calendar
-  await loadCalendarEvents();
-
-  const now = new Date();
-  const calContext = calendarEvents.map(e => {
-    const start = e.start.dateTime || e.start.date;
-    const end = e.end?.dateTime || e.end?.date || start;
-    return `- "${e.summary || 'Untitled'}" from ${start} to ${end}`;
-  }).join('\n') || '(no existing events)';
-
-  const prompt = `You are a scheduling assistant. Today is ${now.toISOString()} (${now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}).
-
-The user said: "${transcript.trim()}"
-
-Their existing Google Calendar events for the next 7 days:
-${calContext}
-
-Your job:
-1. Parse all tasks/events the user wants to schedule from what they said.
-2. Find suitable FREE time slots that don't conflict with existing events.
-3. Use reasonable durations if not specified (gym = 1hr, homework = 1-2hr, etc).
-4. Schedule things at sensible times (gym = morning/evening, study = afternoon/evening, etc).
-
-Respond ONLY with a valid JSON array. No prose, no markdown, no code fences. Just the raw JSON array.
-
-Each object must have exactly these fields:
-- "title": string (short event name)
-- "start": ISO 8601 datetime string (e.g. "2025-06-02T09:00:00")
-- "end": ISO 8601 datetime string
-- "description": string (1 sentence explaining why this slot was chosen)
-
-Example format:
-[{"title":"Gym","start":"2025-06-02T07:00:00","end":"2025-06-02T08:00:00","description":"Early morning slot before your 9am class."}]`;
-
-  try {
-    setLoading(true, 'claude is scheduling...');
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': config.apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || 'API error');
-    }
-
-    const data = await res.json();
-    const raw = data.content?.[0]?.text?.trim();
-    if (!raw) throw new Error('Empty response from Claude');
-
-    // Strip any accidental markdown fences
-    const cleaned = raw.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
-    proposedEvents = JSON.parse(cleaned);
-
-    if (!Array.isArray(proposedEvents) || proposedEvents.length === 0) {
-      throw new Error('No events could be scheduled. Try being more specific.');
-    }
-
-    setLoading(false);
-    renderProposals();
-
-  } catch(e) {
-    setLoading(false);
-    showError('Error: ' + e.message);
-    document.getElementById('process-btn').classList.add('visible');
-  }
-}
-
-function renderProposals() {
-  selectedProposals = new Set(proposedEvents.map((_,i) => i));
-  const list = document.getElementById('proposals-list');
-
-  list.innerHTML = proposedEvents.map((ev, i) => {
-    const start = new Date(ev.start);
-    const end = new Date(ev.end);
-    const timeStr = start.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})
-      + ' · ' + start.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})
-      + ' – ' + end.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-    return `
-      <div class="event-card selected" id="card-${i}" onclick="toggleProposal(${i})">
-        <div class="event-check" id="check-${i}"></div>
-        <div class="event-info">
-          <div class="event-title">${ev.title}</div>
-          <div class="event-time">${timeStr}</div>
-          ${ev.description ? `<div class="event-desc">${ev.description}</div>` : ''}
-        </div>
-      </div>`;
-  }).join('');
-
-  document.getElementById('proposals-section').classList.add('visible');
-}
-
-function toggleProposal(i) {
-  if (selectedProposals.has(i)) selectedProposals.delete(i);
-  else selectedProposals.add(i);
-
-  const card = document.getElementById('card-' + i);
-  card.classList.toggle('selected', selectedProposals.has(i));
-}
-
-// ── WRITE TO CALENDAR ──
-async function confirmEvents() {
-  const toAdd = proposedEvents.filter((_,i) => selectedProposals.has(i));
-  if (toAdd.length === 0) { showToast('Nothing selected', 'error'); return; }
-
-  setLoading(true, `adding ${toAdd.length} event${toAdd.length>1?'s':''}...`);
-  document.getElementById('proposals-section').classList.remove('visible');
-
-  let added = 0;
-  for (const ev of toAdd) {
-    try {
-      const body = {
-        summary: ev.title,
-        description: ev.description || '',
-        start: { dateTime: ev.start, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-        end: { dateTime: ev.end, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-        reminders: { useDefault: true }
-      };
-      const res = await fetch(`${CAL_API}/calendars/primary/events`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${gapiToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) throw new Error(await res.text());
-      added++;
-    } catch(e) {
-      console.error('Failed to add event:', ev.title, e);
-    }
-  }
-
-  setLoading(false);
-  await loadCalendarEvents();
-  resetToMic();
-  showToast(`${added} event${added>1?'s':''} added to Google Calendar ✓`, 'success');
-}
-
-// ── UI HELPERS ──
-function resetToMic() {
-  transcript = '';
-  proposedEvents = [];
-  selectedProposals.clear();
-  document.getElementById('transcript-box').className = 'transcript-box';
-  document.getElementById('transcript-box').textContent = '';
-  document.getElementById('process-btn').classList.remove('visible');
-  document.getElementById('proposals-section').classList.remove('visible');
-  hideError();
-}
-
-function setLoading(show, text = '') {
-  const el = document.getElementById('loading-state');
-  el.className = show ? 'visible' : '';
-  if (text) document.getElementById('loading-text').textContent = text;
-}
-
-function showError(msg) {
-  const el = document.getElementById('error-box');
-  el.textContent = msg;
-  el.className = 'error-box visible';
-}
-
-function hideError() {
-  document.getElementById('error-box').className = 'error-box';
-}
-
-function showToast(msg, type = '') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show ' + type;
-  setTimeout(() => t.className = 'toast', 3000);
-}
-</script>
+<script src="app.js"></script>
 </body>
 </html>
