@@ -134,9 +134,7 @@ async function fetchCalendarName() {
 }
 
 function initGoogleAuth() {
-  // Defer overlay until after browser has painted the app screen
-  requestAnimationFrame(() => setCalOverlay(true, 'Connecting to Google Calendar...'));
-
+  
   const loadGIS = (onload) => {
     // If GIS already loaded (e.g. background reload), call immediately
     if (window.google?.accounts?.oauth2) { onload(); return; }
