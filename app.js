@@ -33,6 +33,15 @@ let currentDayDate    = new Date(); // date shown in day view
 
 // ── INIT ───────────────────────────────────────────────────
 window.onload = () => {
+  // Clear any stale token from previous broken sessions
+  try {
+    const t = localStorage.getItem('scheduler_token');
+    if (t) {
+      const { expiry } = JSON.parse(t);
+      if (Date.now() >= expiry) localStorage.removeItem('scheduler_token');
+    }
+  } catch { localStorage.removeItem('scheduler_token'); }
+
   const saved = localStorage.getItem('scheduler_config');
   if (saved) { config = JSON.parse(saved); showApp(); }
 };
@@ -125,8 +134,8 @@ async function fetchCalendarName() {
 }
 
 function initGoogleAuth() {
-  // Show connecting overlay right away — DOM is ready by the time showApp() calls this
-  setCalOverlay(true, 'Connecting to Google Calendar...');
+  // Defer overlay until after browser has painted the app screen
+  requestAnimationFrame(() => setCalOverlay(true, 'Connecting to Google Calendar...'));
 
   const loadGIS = (onload) => {
     // If GIS already loaded (e.g. background reload), call immediately
@@ -181,6 +190,7 @@ function initGoogleAuth() {
 // Single overlay used for both "connecting" and "Claude thinking" states
 function setCalOverlay(show, text = '', showRetry = false, showSignIn = false) {
   const overlay = document.getElementById('cal-loading-overlay');
+  if (!overlay) return; // DOM not ready yet, bail safely
   const textEl  = document.getElementById('cal-loading-text');
   const inner   = overlay.querySelector('.cal-loading-inner');
 
