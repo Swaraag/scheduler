@@ -197,10 +197,16 @@ function attachGridInteractions(gridBody) {
   gridBody.addEventListener('mouseover', (e) => {
     const block = e.target.closest('.tg-event');
     if (!block) return;
-    // Only treat as "enter" if we're coming from outside the block
     if (block.contains(e.relatedTarget)) return;
     clearTimeout(_hoverTimer);
     clearTimeout(_hoverLeaveTimer);
+    // If this block's popup is already open (from hover-into-popup), de-solidify back to grayed
+    if (!_popupClickOpened && _popupEventData) {
+      const popup = document.getElementById('event-popup');
+      _popupHoverOnly = true;
+      popup.classList.remove('solidified');
+      document.getElementById('popup-overlay').classList.add('hidden');
+    }
     _hoverTimer = setTimeout(() => {
       if (block.dataset.dragging) return;
       const r = block.getBoundingClientRect();
@@ -224,17 +230,22 @@ function attachGridInteractions(gridBody) {
   if (!window._popupHoverWired) {
     window._popupHoverWired = true;
     const popup = document.getElementById('event-popup');
-    // Moving into the popup cancels the close timer
-    popup.addEventListener('mouseenter', () => clearTimeout(_hoverLeaveTimer));
-    // Moving out of the popup closes it if hover-only
-    popup.addEventListener('mouseleave', () => {
-      _hoverLeaveTimer = setTimeout(() => _closeHoverPopup(), 150);
-    });
-    // Clicking anywhere on the popup solidifies it
-    popup.addEventListener('mousedown', () => {
+    // Entering popup: solidify visually but not permanently (not click-opened)
+    popup.addEventListener('mouseenter', () => {
       clearTimeout(_hoverLeaveTimer);
       _popupHoverOnly = false;
       popup.classList.add('solidified');
+    });
+    // Leaving popup: close unless a real click opened it
+    popup.addEventListener('mouseleave', () => {
+      _hoverLeaveTimer = setTimeout(() => _closeHoverPopup(), 150);
+    });
+    // Clicking popup: make it truly persistent
+    popup.addEventListener('mousedown', () => {
+      clearTimeout(_hoverLeaveTimer);
+      _popupClickOpened = true;
+      popup.classList.add('solidified');
+      document.getElementById('popup-overlay').classList.remove('hidden');
     });
   }
 

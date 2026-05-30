@@ -347,9 +347,10 @@ Respond with ONLY the new memory string. No quotes, no labels, no explanation.`,
 }
 
 // ── EVENT POPUP ────────────────────────────────────────────
-let _popupEventData  = null;
-let _popupHoverOnly  = false; // true = opened by hover, closes on mouseleave
-let _popupCloseTimer = null;
+let _popupEventData    = null;
+let _popupHoverOnly    = false; // true = still purely hover (semi-transparent, closes on any leave)
+let _popupClickOpened  = false; // true = real click, stays open until explicit dismiss
+let _popupCloseTimer   = null;
 
 function showEventPopup(mouseEvent, encodedData, hoverOpened = false) {
   mouseEvent.stopPropagation();
@@ -365,17 +366,19 @@ function _renderPopup(data, cx, cy, hoverOpened = false) {
   const popup   = document.getElementById('event-popup');
   const overlay = document.getElementById('popup-overlay');
 
-  // If popup is already showing the same event and we're clicking (solidifying), just solidify
-  if (_popupEventData && _popupHoverOnly && !hoverOpened &&
+  // If popup is already showing the same event and we're clicking, just solidify in-place
+  if (_popupEventData && !_popupClickOpened && !hoverOpened &&
       _popupEventData.title === data.title && _popupEventData.start === data.start) {
-    _popupHoverOnly = false;
+    _popupHoverOnly   = false;
+    _popupClickOpened = true;
     popup.classList.add('solidified');
     overlay.classList.remove('hidden');
     return;
   }
 
-  _popupEventData = data;
-  _popupHoverOnly = hoverOpened;
+  _popupEventData   = data;
+  _popupHoverOnly   = hoverOpened;
+  _popupClickOpened = !hoverOpened;
   clearTimeout(_popupCloseTimer);
 
   document.getElementById('popup-read-view').classList.remove('hidden');
@@ -496,15 +499,15 @@ async function confirmDeleteEvent(id) {
 function closeEventPopup() {
   const popup = document.getElementById('event-popup');
   popup.classList.remove('visible', 'solidified');
-  // Always hide the overlay immediately so nothing blocks the page
   document.getElementById('popup-overlay').classList.add('hidden');
   _popupCloseTimer = setTimeout(() => popup.classList.add('hidden'), 180);
-  _popupEventData = null;
-  _popupHoverOnly = false;
+  _popupEventData   = null;
+  _popupHoverOnly   = false;
+  _popupClickOpened = false;
 }
 
 function _closeHoverPopup() {
-  if (!_popupHoverOnly) return;
+  if (_popupClickOpened) return;
   closeEventPopup();
 }
 
