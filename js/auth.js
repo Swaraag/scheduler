@@ -61,13 +61,66 @@ function loadSavedToken() {
 
 // ── SIGN IN ────────────────────────────────────────────────
 function startGoogleSignIn() {
-  // Redirect to /api/auth which redirects to Google — no popup needed
-  const returnTo = location.pathname + location.search;
-  location.href = `${API_BASE}/api/auth?return=${encodeURIComponent(returnTo)}`;
+  // Show an email pre-check form before redirecting to Google.
+  // This prevents non-test-users from hitting Google's unrecoverable error page.
+  const overlay = document.getElementById('cal-loading-overlay');
+  const textEl  = document.getElementById('cal-loading-text');
+  const inner   = overlay.querySelector('.cal-loading-inner');
+  overlay.classList.remove('hidden');
+  textEl.textContent = 'Enter your Google email to continue';
+  const spinner = inner.querySelector('.spinner-lg');
+  if (spinner) spinner.style.display = 'none';
+  inner.querySelectorAll('.overlay-action-btn, .request-access-form, .signin-email-form').forEach(e => e.remove());
+
+  const form = document.createElement('div');
+  form.className = 'signin-email-form request-access-form';
+  form.innerHTML = `
+    <input id="signin-email" type="email" placeholder="you@gmail.com" style="margin-bottom:10px" />
+    <button class="overlay-action-btn" id="signin-check-btn" onclick="_checkAndSignIn()">Continue →</button>
+  `;
+  inner.appendChild(form);
+  // Reset button if user navigates back from Google
+  window.addEventListener('focus', () => {
+    const btn = document.getElementById('signin-check-btn');
+    if (btn && btn.disabled) { btn.textContent = 'Continue →'; btn.disabled = false; }
+  }, { once: true });
+
+  setTimeout(() => {
+    document.getElementById('signin-email')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') _checkAndSignIn();
+    });
+    document.getElementById('signin-email')?.focus();
+  }, 50);
+}
+
+async function _checkAndSignIn() {
+  const emailEl = document.getElementById('signin-email');
+  const email   = emailEl?.value.trim();
+  if (!email) return;
+  const btn = document.getElementById('signin-check-btn');
+  btn.textContent = 'Checking...'; btn.disabled = true;
+
+  try {
+    const res  = await fetch('/api/check-user', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const { allowed } = await res.json();
+    if (allowed) {
+      // Pre-fill the hint so Google picks the right account
+      const returnTo = location.pathname + location.search;
+      location.href = `${API_BASE}/api/auth?return=${encodeURIComponent(returnTo)}&login_hint=${encodeURIComponent(email)}`;
+    } else {
+      // Not approved — show request-access form with email pre-filled
+      _showRequestAccess(email);
+    }
+  } catch {
+    btn.textContent = 'Continue →'; btn.disabled = false;
+  }
 }
 
 // ── REQUEST ACCESS ─────────────────────────────────────────
-function _showRequestAccess() {
+function _showRequestAccess(prefillEmail = '') {
   setCalStatus(false, 'access denied');
   const overlay = document.getElementById('cal-loading-overlay');
   const textEl  = document.getElementById('cal-loading-text');
@@ -80,11 +133,15 @@ function _showRequestAccess() {
   form.className = 'request-access-form';
   form.innerHTML = `
     <p style="font-size:12px;color:var(--soft);text-align:center;margin-bottom:12px">
-      Request access and the owner will be notified.
+      Request access to use this site in testing!
     </p>
     <input id="req-name"  type="text"  placeholder="Your name"  style="margin-bottom:8px" />
-    <input id="req-email" type="email" placeholder="Your email" style="margin-bottom:10px" />
-    <button class="overlay-action-btn" id="req-submit-btn" onclick="submitAccessRequest()">Request Access</button>
+    <input id="req-email" type="email" placeholder="Your email" value="${prefillEmail}" style="margin-bottom:8px" />
+    <textarea id="req-note" placeholder="Note (optional) — why do you want access?" style="margin-bottom:10px;resize:vertical;min-height:60px"></textarea>
+    <div style="display:flex;gap:8px;width:100%">
+      <button class="overlay-action-btn" id="req-submit-btn" onclick="submitAccessRequest()" style="flex:1">Request Access</button>
+      <button class="overlay-action-btn" onclick="startGoogleSignIn()" style="border-color:var(--border2);color:var(--muted)">Try different email</button>
+    </div>
   `;
   inner.appendChild(form);
 }
@@ -92,7 +149,9 @@ function _showRequestAccess() {
 async function submitAccessRequest() {
   const name  = document.getElementById('req-name')?.value.trim();
   const email = document.getElementById('req-email')?.value.trim();
-  if (!email) { return; }
+  const note  = document.getElementById('req-note')?.value.trim();
+  if (!name)  { document.getElementById('req-name').focus();  return; }
+  if (!email) { document.getElementById('req-email').focus(); return; }
   const btn = document.getElementById('req-submit-btn');
   btn.textContent = 'Sending...';
   btn.disabled = true;
@@ -100,17 +159,22 @@ async function submitAccessRequest() {
     await fetch('/api/request-access', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ name, email }),
+      body:    JSON.stringify({ name, email, note }),
     });
   } catch {}
   const textEl = document.getElementById('cal-loading-text');
   textEl.textContent = 'Request sent!';
   const form = document.querySelector('.request-access-form');
-  if (form) form.innerHTML = `<p style="font-size:12px;color:var(--soft);text-align:center">The owner has been notified. You'll be able to sign in once approved.</p>`;
+  if (form) form.innerHTML = `
+    <p style="font-size:12px;color:var(--soft);text-align:center;margin-bottom:12px">The owner has been notified. Once approved, click below to sign in.</p>
+    <button class="overlay-action-btn" onclick="startGoogleSignIn()">Try signing in →</button>
+  `;
 }
 
 // ── AUTH SUCCESS ───────────────────────────────────────────
 function onAuthSuccess() {
+  localStorage.setItem('scheduler_has_session', '1');
+  document.getElementById('settings-btn')?.classList.remove('hidden');
   setCalOverlay(false);
   setCalStatus(true, 'calendar connected');
   fetchCalendarList().then(() => { fetchEvents7(); fetchEventsYear(); });
@@ -148,13 +212,24 @@ function initGoogleAuth() {
     return;
   }
 
-  // 3. Try silent refresh via cookie (user signed in before, cookie still valid)
-  setCalOverlay(true, 'Connecting to Google Calendar...', false, true);
-  setCalStatus(false, 'connecting...');
-  _silentRefresh().then(ok => {
-    if (ok) { onAuthSuccess(); }
-    // If not ok, the overlay with "Retry" button is already showing
-  });
+  // 3. Try silent refresh via cookie — only if we have reason to think a cookie exists.
+  // Use a fast cookie-presence hint stored in localStorage to avoid showing the
+  // "Connecting..." spinner to brand new users who have never signed in.
+  if (localStorage.getItem('scheduler_has_session')) {
+    setCalOverlay(true, 'Connecting to Google Calendar...', false, false);
+    setCalStatus(false, 'connecting...');
+    _silentRefresh().then(ok => {
+      if (ok) { onAuthSuccess(); return; }
+      // Cookie expired or gone — clear the hint and show sign-in
+      localStorage.removeItem('scheduler_has_session');
+      setCalOverlay(true, 'Sign in to get started', false, true);
+      setCalStatus(false, 'not connected');
+    });
+  } else {
+    // First-time visitor — show sign-in immediately, no spinner
+    setCalOverlay(true, 'Sign in to get started', false, true);
+    setCalStatus(false, 'not connected');
+  }
 }
 
 // ── CALENDAR LIST ──────────────────────────────────────────

@@ -122,8 +122,15 @@ function showResetConfirm() {
   document.getElementById('reset-confirm-area').classList.remove('hidden');
 }
 
-function resetConfig() {
-  localStorage.removeItem('scheduler_config');
+async function resetConfig() {
+  // Sign out server-side (clears httpOnly cookie + revokes Google token)
+  try { await fetch('/api/signout', { method: 'POST', credentials: 'include' }); } catch {}
+  // Clear all client-side state
+  ['scheduler_token', 'scheduler_has_session', 'scheduler_config',
+   'scheduler_anth_key', 'scheduler_enabled_cals', 'scheduler_memory',
+   'scheduler_theme', 'scheduler_auth_return'].forEach(k => localStorage.removeItem(k));
+  gapiToken = null;
+  document.getElementById('settings-btn')?.classList.add('hidden');
   location.reload();
 }
 
@@ -275,6 +282,9 @@ function setCalOverlay(show, text = '', showRetry = false, showSignIn = false, s
   if (!show) { if (!overlay.dataset.claudeLoading) overlay.classList.add('hidden'); return; }
   overlay.classList.remove('hidden');
   if (text) textEl.textContent = text;
+  // Hide spinner when showing a sign-in or retry button — it's not loading, it's waiting for user action
+  const spinner = inner.querySelector('.spinner-lg');
+  if (spinner) spinner.style.display = (showSignIn || showRedirect || showRetry) ? 'none' : '';
   inner.querySelectorAll('.overlay-action-btn').forEach(b => b.remove());
   if (showRetry) {
     const btn = document.createElement('button');
@@ -295,6 +305,8 @@ function setLoading(show, text = '') {
   if (show) {
     overlay.dataset.claudeLoading = '1';
     overlay.querySelectorAll('.overlay-action-btn').forEach(b => b.remove());
+    const spinner = overlay.querySelector('.spinner-lg');
+    if (spinner) spinner.style.display = '';
     setCalOverlay(true, text);
   } else {
     delete overlay.dataset.claudeLoading;
