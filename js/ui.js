@@ -22,7 +22,9 @@ window.onload = () => {
     if (active?.id === 'revise-input') { e.preventDefault(); handleRevise(); }
   });
 
-  // Load Anthropic key from env (via API) — no longer need client-side config
+  loadTodos();
+  renderTodos();
+
   const savedKey = localStorage.getItem('scheduler_anth_key');
   if (savedKey) config.apiKey = savedKey;
 
@@ -252,10 +254,12 @@ function clearImage() {
 // ── PROPOSE HANDLER ────────────────────────────────────────
 function handlePropose() {
   const text = document.getElementById('main-input').value.trim();
-  if (!text && !uploadedImage) { showError('Say or type what you want to schedule.'); return; }
+  if (!text && !uploadedImage) { showError('Say or type what you want to add.'); return; }
   if (!gapiToken) { startGoogleSignIn(); return; }
   if (isRecording) stopRecording();
-  uploadedImage ? scheduleFromImage(text) : scheduleFromText(text);
+  document.getElementById('main-input').value = '';
+  routeAndProcess(text, uploadedImage);
+  clearImage();
 }
 
 // ── UI HELPERS ─────────────────────────────────────────────

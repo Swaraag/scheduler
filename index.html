@@ -59,38 +59,65 @@
       </div>
     </div>
 
-    <!-- Calendar pill switcher -->
-    <div class="cal-pill-row">
-      <div class="cal-pills">
-        <button class="cal-pill" id="pill-day"   onclick="switchCalView('day')">Day</button>
-        <button class="cal-pill active" id="pill-week" onclick="switchCalView('week')">Week</button>
-        <button class="cal-pill" id="pill-month" onclick="switchCalView('month')">Month</button>
-        <button class="cal-pill" id="pill-year"  onclick="switchCalView('year')">Year</button>
-      </div>
-      <button class="today-btn" onclick="goToToday()">Today</button>
-    </div>
+    <!-- Two-column layout: calendar + todo sidebar -->
+    <div class="main-columns">
 
-    <!-- Calendar container with overlay -->
-    <div id="cal-container">
-      <div id="cal-day-view"   class="cal-view hidden"></div>
-      <div id="cal-week-view"  class="cal-view"></div>
-      <div id="cal-month-view" class="cal-view hidden"></div>
-      <div id="cal-year-view"  class="cal-view hidden">
-        <div class="year-loading" id="year-loading">
-          <div class="spinner"></div>
-          <span>loading year data...</span>
-        </div>
-        <div id="year-grid" class="hidden"></div>
-      </div>
+      <!-- Left: calendar -->
+      <div class="cal-column">
 
-      <!-- Loading overlay — sits on top of the calendar -->
-      <div id="cal-loading-overlay" class="cal-loading-overlay hidden">
-        <div class="cal-loading-inner">
-          <div class="spinner-lg"></div>
-          <span id="cal-loading-text">thinking...</span>
+        <!-- Calendar pill switcher -->
+        <div class="cal-pill-row">
+          <div class="cal-pills">
+            <button class="cal-pill" id="pill-day"   onclick="switchCalView('day')">Day</button>
+            <button class="cal-pill active" id="pill-week" onclick="switchCalView('week')">Week</button>
+            <button class="cal-pill" id="pill-month" onclick="switchCalView('month')">Month</button>
+            <button class="cal-pill" id="pill-year"  onclick="switchCalView('year')">Year</button>
+          </div>
+          <button class="today-btn" onclick="goToToday()">Today</button>
         </div>
-      </div>
-    </div>
+
+        <!-- Calendar container with overlay -->
+        <div id="cal-container">
+          <div id="cal-day-view"   class="cal-view hidden"></div>
+          <div id="cal-week-view"  class="cal-view"></div>
+          <div id="cal-month-view" class="cal-view hidden"></div>
+          <div id="cal-year-view"  class="cal-view hidden">
+            <div class="year-loading" id="year-loading">
+              <div class="spinner"></div>
+              <span>loading year data...</span>
+            </div>
+            <div id="year-grid" class="hidden"></div>
+          </div>
+
+          <!-- Loading overlay — sits on top of the calendar -->
+          <div id="cal-loading-overlay" class="cal-loading-overlay hidden">
+            <div class="cal-loading-inner">
+              <div class="spinner-lg"></div>
+              <span id="cal-loading-text">thinking...</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end cal-column -->
+
+      <!-- Right: todo sidebar -->
+      <div class="todo-sidebar" id="todo-sidebar">
+        <div class="todo-header">
+          <span class="todo-title">// unscheduled to-dos</span>
+          <button class="todo-schedule-btn" id="todo-schedule-btn" onclick="scheduleTodos()" style="display:none" title="Schedule todos on calendar">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Schedule all
+          </button>
+        </div>
+        <ul class="todo-list" id="todo-list"></ul>
+        <p class="todo-empty" id="todo-empty">No todos yet. Speak or type a task with no specific time — like "buy groceries" or "email professor".</p>
+        <div class="todo-input-row">
+          <input type="text" id="todo-manual-input" class="todo-input" placeholder="Add a todo manually..." onkeydown="if(event.key==='Enter')addTodoFromInput()" />
+          <button class="todo-add-btn" onclick="addTodoFromInput()">+</button>
+        </div>
+      </div><!-- end todo-sidebar -->
+
+    </div><!-- end main-columns -->
 
     <!-- Central mic button -->
     <div class="mic-center-zone">
@@ -114,7 +141,7 @@
         </div>
       </div>
       <div class="textarea-wrap">
-        <textarea id="main-input" placeholder="What do you need to schedule? Speak, type, or upload an image..." rows="3"></textarea>
+        <textarea id="main-input" placeholder="Schedule an event or add a todo — speak, type, or upload an image. Claude decides what goes on the calendar vs the todo list." rows="3"></textarea>
         <div class="textarea-actions">
           <div class="textarea-left">
             <button class="action-icon-btn" onclick="document.getElementById('image-file-input').click()" title="Attach image">
@@ -127,7 +154,7 @@
             <input type="file" id="image-file-input" accept="image/*" style="display:none" onchange="handleImageUpload(event)" />
           </div>
           <div class="textarea-right">
-            <button class="manual-btn" onclick="handleManualEntry()">+ Manual</button>
+            <button class="manual-btn" onclick="handleManualEntry()">+ Manual Calendar Event</button>
             <button class="propose-btn" id="propose-btn" onclick="handlePropose()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               Propose
@@ -238,6 +265,7 @@
 <script src="js/auth.js"></script>
 <script src="js/views.js"></script>
 <script src="js/proposals.js"></script>
+<script src="js/todos.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>

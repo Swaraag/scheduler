@@ -150,7 +150,7 @@ async function callClaude(messages) {
 
 // ── MANUAL ENTRY ───────────────────────────────────────────
 function handleManualEntry() {
-  // Default to tomorrow at 9am–10am
+  if (!gapiToken) { startGoogleSignIn(); return; }
   const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
   const pad = n => String(n).padStart(2, '0');
   const fmt = (date) => `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`;
@@ -326,6 +326,8 @@ async function confirmEvents() {
       );
       if (!res.ok) throw new Error(await res.text());
       added++;
+      // If this event came from a todo, mark that todo as scheduled
+      _markMatchingTodoScheduled(ev.title);
     } catch (e) { console.error('Failed to add:', ev.title, e); }
   }
   setLoading(false);
