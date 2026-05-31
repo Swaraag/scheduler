@@ -34,6 +34,12 @@
       <div id="cal-day-view"   class="cal-view hidden"></div>
       <div id="cal-week-view"  class="cal-view"></div>
       <div id="cal-month-view" class="cal-view hidden"></div>
+      <div id="share-cal-overlay" class="cal-loading-overlay hidden">
+        <div class="cal-loading-inner">
+          <div class="spinner-lg"></div>
+          <span id="share-cal-overlay-text">finding a time...</span>
+        </div>
+      </div>
     </div>
 
     <!-- Mic button -->
@@ -116,9 +122,16 @@
     <div class="error-box" id="share-error"></div>
 
     <!-- Proposed slot + attendee info -->
-    <div id="share-proposals-section" style="display:none">
+    <div id="share-proposals-section" style="display:none;margin-top:16px">
       <div class="proposals-header">// proposed time</div>
       <div id="share-proposals-list"></div>
+
+      <!-- Revise area -->
+      <div id="share-revise-area" class="revise-area hidden">
+        <textarea id="share-revise-input" placeholder="What would you like to change? e.g. 'make it earlier' or 'push to next week'" rows="2"></textarea>
+        <button class="btn btn-primary" style="margin-top:8px" onclick="handleShareRevise()">Re-propose →</button>
+      </div>
+
       <div class="share-attendee-row">
         <div class="input-group" style="flex:1">
           <span class="input-label">Your name</span>
@@ -131,6 +144,7 @@
       </div>
       <div class="confirm-row" style="margin-top:12px">
         <button class="btn btn-confirm" onclick="confirmShareEvent()">Send Request →</button>
+        <button class="btn btn-revise"  onclick="shareToggleRevise()">Revise</button>
         <button class="btn btn-ghost"   onclick="resetShareUI()">Cancel</button>
       </div>
     </div>

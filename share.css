@@ -64,17 +64,15 @@
 .share-attendee-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
 .share-attendee-row .input-group { flex: 1; min-width: 180px; }
 
-/* Theme all share page text/email inputs */
-#share-container input[type="text"],
-#share-container input[type="email"],
-#share-container input[type="date"],
-#share-container input[type="time"],
+/* Theme all share page inputs — broad selector to catch email/date/time browser overrides */
+#share-container input,
 #share-container textarea {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: var(--r); color: var(--text);
+  background: var(--surface2) !important; border: 1px solid var(--border) !important;
+  border-radius: var(--r); color: var(--text) !important;
   font-family: 'DM Mono', monospace; font-size: 13px;
   padding: 10px 12px; width: 100%; outline: none;
   transition: border-color 0.15s; color-scheme: dark;
+  -webkit-appearance: none; appearance: none;
 }
 #share-container input:focus,
 #share-container textarea:focus { border-color: var(--accent); }

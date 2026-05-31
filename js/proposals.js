@@ -539,8 +539,10 @@ document.addEventListener('scroll', closeEventPopup, { capture: true, passive: t
 // ── REVISE ─────────────────────────────────────────────────
 function toggleRevise() {
   const area = document.getElementById('revise-area');
-  area.classList.toggle('hidden');
-  if (!area.classList.contains('hidden')) document.getElementById('revise-input').focus();
+  const btn  = document.querySelector('.btn-revise');
+  const isHidden = area.classList.toggle('hidden');
+  if (btn) btn.textContent = isHidden ? 'Revise' : 'Cancel Revision';
+  if (!isHidden) document.getElementById('revise-input').focus();
 }
 
 async function handleRevise() {

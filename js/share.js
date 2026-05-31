@@ -258,15 +258,55 @@ function shareHideManual() {
   document.getElementById('share-manual-area').classList.add('hidden');
 }
 
+// ── LOADING HELPERS ────────────────────────────────────────
+function shareSetLoading(on, text = 'finding a time...') {
+  const overlay = document.getElementById('share-cal-overlay');
+  const overlayText = document.getElementById('share-cal-overlay-text');
+  if (overlay) {
+    overlay.classList.toggle('hidden', !on);
+    if (overlayText) overlayText.textContent = text;
+  }
+  // Disable/enable all action buttons
+  document.querySelectorAll('#main-screen .propose-btn, #main-screen .manual-btn, #main-screen .share-tab, #share-mic-btn').forEach(b => {
+    b.disabled = on;
+    b.style.opacity = on ? '0.4' : '';
+    b.style.pointerEvents = on ? 'none' : '';
+  });
+}
+
+// ── REVISE ──────────────────────────────────────────────────
+function shareToggleRevise() {
+  const area = document.getElementById('share-revise-area');
+  const btn  = document.querySelector('#share-proposals-section .btn-revise');
+  const isHidden = area.classList.toggle('hidden');
+  if (btn) btn.textContent = isHidden ? 'Revise' : 'Cancel Revision';
+  if (!isHidden) document.getElementById('share-revise-input').focus();
+}
+
+async function handleShareRevise() {
+  const revision = document.getElementById('share-revise-input').value.trim();
+  if (!revision) return;
+  const currentProposal = pendingSlots.map(e => `- "${e.title}" from ${e.start} to ${e.end}`).join('\n');
+  document.getElementById('share-revise-input').value = '';
+  document.getElementById('share-revise-area').classList.add('hidden');
+  const btn = document.querySelector('#share-proposals-section .btn-revise');
+  if (btn) btn.textContent = 'Revise';
+  // Re-run Claude with revision context
+  const text = `I previously proposed:\n${currentProposal}\n\nPlease revise: ${revision}`;
+  await _callShareClaude(text, null, 're-proposing...');
+}
+
 // ── CLAUDE PROPOSE ─────────────────────────────────────────
 async function handleSharePropose() {
   const text = document.getElementById('share-input').value.trim();
   if (!text && !shareUploadedImage) { showShareError("Describe or speak what you'd like to schedule."); return; }
   if (shareIsRecording) shareStopRecording();
   showShareError('');
-  const btn = document.querySelector('.propose-btn');
-  const origText = btn.innerHTML;
-  btn.textContent = 'Finding a time...';
+  await _callShareClaude(text, shareUploadedImage, 'finding a time...');
+}
+
+async function _callShareClaude(text, imageData, loadingText = 'finding a time...') {
+  shareSetLoading(true, loadingText);
 
   const now = new Date();
   const calContext = ownerEvents.slice(0, 80).map(e => `- busy from ${e.start} to ${e.end}`).join('\n') || '(no events)';
@@ -283,9 +323,9 @@ Respond ONLY with a JSON array with one object: { "title", "start" (ISO 8601), "
     const { key } = await keyRes.json();
 
     let userContent;
-    if (shareUploadedImage) {
+    if (imageData) {
       userContent = [
-        { type: 'image', source: { type: 'base64', media_type: shareUploadedImage.mediaType, data: shareUploadedImage.base64 } },
+        { type: 'image', source: { type: 'base64', media_type: imageData.mediaType, data: imageData.base64 } },
         { type: 'text', text: text ? `Schedule info from image. Additional context: ${text}` : 'Extract scheduling info from this image and find a free slot.' },
       ];
     } else {
@@ -312,7 +352,7 @@ Respond ONLY with a JSON array with one object: { "title", "start" (ISO 8601), "
   } catch {
     showShareError('Could not find a time. Try being more specific or use + Manual.');
   } finally {
-    btn.innerHTML = origText;
+    shareSetLoading(false);
   }
 }
 
