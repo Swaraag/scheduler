@@ -8,8 +8,8 @@
   <link rel="stylesheet" href="style.css" />
   <script>
     (function() {
-      const cfg = localStorage.getItem('scheduler_config');
-      if (cfg) document.documentElement.setAttribute('data-authed', '1');
+      // Always show app screen — auth is handled server-side now
+      document.documentElement.setAttribute('data-authed', '1');
       const theme = localStorage.getItem('scheduler_theme');
       if (theme) {
         try {
@@ -33,28 +33,9 @@
       <p class="subtitle">// powered by claude + google calendar</p>
     </header>
     <div class="setup-card">
-      <h2>One-time setup</h2>
-      <div class="step">
-        <div class="step-num">1</div>
-        <div class="step-text">Go to <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a>, create a project, and enable the <strong>Google Calendar API</strong>.</div>
-      </div>
-      <div class="step">
-        <div class="step-num">2</div>
-        <div class="step-text">Go to <strong>APIs &amp; Services → Credentials → Create Credentials → OAuth client ID</strong>. Choose <code>Web application</code>. Add your site URL under both <strong>Authorized JavaScript origins</strong> and <strong>Authorized redirect URIs</strong>. Copy the Client ID.</div>
-      </div>
-      <div class="step">
-        <div class="step-num">3</div>
-        <div class="step-text">Get your Anthropic API key from <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>.</div>
-      </div>
-      <div class="input-group">
-        <span class="input-label">Google OAuth Client ID</span>
-        <input type="text" id="input-client-id" placeholder="xxxx.apps.googleusercontent.com" />
-      </div>
-      <div class="input-group">
-        <span class="input-label">Anthropic API Key</span>
-        <input type="password" id="input-api-key" placeholder="sk-ant-..." />
-      </div>
-      <button class="btn btn-primary" onclick="saveConfig()">Save &amp; Continue →</button>
+      <h2>Connect your calendar</h2>
+      <p class="step-text" style="margin-bottom:20px;color:var(--soft)">Sign in with Google to connect your calendar. Your events are never stored — everything stays between you and Google.</p>
+      <button class="btn btn-primary" onclick="startGoogleSignIn()">Sign in with Google →</button>
     </div>
   </div>
 

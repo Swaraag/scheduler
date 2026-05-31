@@ -19,15 +19,20 @@ export default async function handler(req, res) {
     const calId = process.env.GOOGLE_CALENDAR_ID || 'primary';
     const tz    = 'America/Los_Angeles'; // server default; client sends its own tz in start/end
 
-    const attendees = [];
+    // Add the owner so they receive an RSVP invite email to accept/decline
+    const ownerEmail = process.env.OWNER_EMAIL;
+    const attendees  = [];
+    if (ownerEmail)    attendees.push({ email: ownerEmail, organizer: true, responseStatus: 'accepted' });
     if (attendeeEmail) attendees.push({ email: attendeeEmail, displayName: attendeeName || undefined });
 
     const body = {
       summary:     title,
-      description: description || `Meeting requested by ${attendeeName || 'a visitor'}.`,
+      description: [description, `Requested by: ${attendeeName || 'visitor'} <${attendeeEmail || 'no email'}>`].filter(Boolean).join('\n\n'),
       start:       { dateTime: start },
       end:         { dateTime: end },
       attendees,
+      guestsCanModifyEvent: false,
+      guestsCanInviteOthers: false,
     };
 
     const gcalRes = await fetch(

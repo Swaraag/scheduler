@@ -1,4 +1,7 @@
-// Google auth, calendar list, and event fetching — all "talking to Google"
+// Google auth — server-side OAuth flow via Vercel API functions.
+// No GIS script, no popups. Works on Safari iOS and all browsers.
+
+const API_BASE = ''; // empty = same origin (works for both vercel dev and production)
 
 // ── AUTH-AWARE FETCH ───────────────────────────────────────
 async function apiFetch(url, options = {}) {
@@ -10,65 +13,31 @@ async function apiFetch(url, options = {}) {
   let res = await doFetch();
   if (res.status !== 401) return res;
 
+  // Token expired — try to refresh silently via server
   const refreshed = await _silentRefresh();
   if (!refreshed) {
-    setCalOverlay(true, 'Session expired — sign in again', false, true);
+    setCalOverlay(true, 'Session expired', false, true);
     setCalStatus(false, 'session expired');
     throw new Error('Session expired');
   }
 
   res = await doFetch();
   if (res.status === 401) {
-    setCalOverlay(true, 'Session expired — sign in again', false, true);
+    setCalOverlay(true, 'Session expired', false, true);
     setCalStatus(false, 'session expired');
     throw new Error('Session expired');
   }
   return res;
 }
 
-function _silentRefresh() {
-  return new Promise(resolve => {
-    if (!window.google?.accounts?.oauth2 || !config.clientId) { resolve(false); return; }
-    const tc = google.accounts.oauth2.initTokenClient({
-      client_id: config.clientId,
-      scope:     GOOGLE_SCOPES,
-      callback:  (resp) => {
-        if (resp.error) { resolve(false); return; }
-        saveToken(resp.access_token);
-        resolve(true);
-      },
-    });
-    tc.requestAccessToken({ prompt: '' });
-  });
-}
-
-// ── REDIRECT AUTH (popup-blocked fallback) ─────────────────
-// Saves view state, then redirects the whole page to Google's auth endpoint.
-// Google redirects back with #access_token in the hash — handled in initGoogleAuth.
-function startGoogleAuthRedirect() {
-  if (!config.clientId) return;
-  localStorage.setItem('scheduler_auth_return', JSON.stringify({
-    view: currentView, weekOffset: currentWeekOffset,
-    monthOffset: currentMonthOffset, yearOffset: currentYearOffset,
-  }));
-  const params = new URLSearchParams({
-    client_id:     config.clientId,
-    redirect_uri:  location.origin + location.pathname,
-    response_type: 'token',
-    scope:         GOOGLE_SCOPES,
-  });
-  location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-}
-
-function _handleRedirectToken() {
-  if (!location.hash || !location.hash.includes('access_token')) return false;
-  const params = new URLSearchParams(location.hash.slice(1));
-  const token  = params.get('access_token');
-  const expiry = parseInt(params.get('expires_in') || '3600', 10);
-  history.replaceState(null, '', location.pathname);
-  if (!token) return false;
-  saveToken(token, expiry);
-  return true;
+async function _silentRefresh() {
+  try {
+    const res = await fetch(`${API_BASE}/api/token`, { credentials: 'include' });
+    if (!res.ok) return false;
+    const { access_token, expires_in } = await res.json();
+    saveToken(access_token, expires_in);
+    return true;
+  } catch { return false; }
 }
 
 // ── TOKEN STORAGE ──────────────────────────────────────────
@@ -90,6 +59,13 @@ function loadSavedToken() {
   return false;
 }
 
+// ── SIGN IN ────────────────────────────────────────────────
+function startGoogleSignIn() {
+  // Redirect to /api/auth which redirects to Google — no popup needed
+  const returnTo = location.pathname + location.search;
+  location.href = `${API_BASE}/api/auth?return=${encodeURIComponent(returnTo)}`;
+}
+
 // ── AUTH SUCCESS ───────────────────────────────────────────
 function onAuthSuccess() {
   setCalOverlay(false);
@@ -99,72 +75,38 @@ function onAuthSuccess() {
 
 // ── INIT ───────────────────────────────────────────────────
 function initGoogleAuth() {
-  // Check if we just came back from a redirect-based auth (popup-blocked fallback)
-  if (_handleRedirectToken()) {
-    try {
-      const ret = JSON.parse(localStorage.getItem('scheduler_auth_return') || 'null');
-      if (ret) {
-        localStorage.removeItem('scheduler_auth_return');
-        currentWeekOffset = ret.weekOffset || 0;
-        currentMonthOffset = ret.monthOffset || 0;
-        currentYearOffset = ret.yearOffset || 0;
-      }
-    } catch {}
-    onAuthSuccess();
-    return;
-  }
+  // 1. Check if we just came back from Google's OAuth redirect
+  if (location.hash) {
+    const params = new URLSearchParams(location.hash.slice(1));
+    const token  = params.get('access_token');
+    const error  = params.get('error');
+    const expiry = parseInt(params.get('expires_in') || '3600', 10);
+    history.replaceState(null, '', location.pathname);
 
-  const loadGIS = (onload) => {
-    if (window.google?.accounts?.oauth2) { onload(); return; }
-    const s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client';
-    s.onload = onload;
-    s.onerror = () => {
-      setCalOverlay(true, 'Failed to load Google auth', true);
-      setCalStatus(false, 'network error');
-    };
-    document.head.appendChild(s);
-  };
-
-  const authCallback = (resp) => {
-    if (!resp.error) {
-      saveToken(resp.access_token);
+    if (token) {
+      saveToken(token, expiry);
       onAuthSuccess();
       return;
     }
-    if (resp.error === 'access_denied') {
-      setCalOverlay(true, 'Access denied — check Google Cloud test users', true);
-      setCalStatus(false, 'access denied');
-    } else if (resp.error === 'popup_blocked' || resp.error === 'popup_failed_to_open') {
-      // Chrome blocked the popup — offer a redirect-based sign-in instead
-      setCalOverlay(true, 'Popup blocked by browser', false, false, true);
-      setCalStatus(false, 'popup blocked');
-    } else {
-      // interaction_required, login_required, etc. — user needs to sign in
-      setCalOverlay(true, 'Tap to connect Google Calendar', false, true);
-      setCalStatus(false, 'sign in required');
+    if (error) {
+      setCalOverlay(true, `Sign-in failed: ${error}`, true);
+      setCalStatus(false, 'sign-in failed');
+      return;
     }
-  };
+  }
 
-  const makeTC = () => google.accounts.oauth2.initTokenClient({
-    client_id: config.clientId,
-    scope:     GOOGLE_SCOPES,
-    callback:  authCallback,
-  });
-
+  // 2. Try cached token
   if (loadSavedToken()) {
     onAuthSuccess();
-    loadGIS(() => { window._tokenClient = makeTC(); });
     return;
   }
 
-  // Show connecting overlay immediately with a sign-in button visible from the start.
-  // The silent auth attempt runs in the background — if it succeeds the overlay
-  // disappears. If Chrome blocks the popup, the button is already there to click.
-  requestAnimationFrame(() => setCalOverlay(true, 'Connecting to Google Calendar...', false, true));
-  loadGIS(() => {
-    window._tokenClient = makeTC();
-    window._tokenClient.requestAccessToken({ prompt: '' });
+  // 3. Try silent refresh via cookie (user signed in before, cookie still valid)
+  setCalOverlay(true, 'Connecting to Google Calendar...', false, true);
+  setCalStatus(false, 'connecting...');
+  _silentRefresh().then(ok => {
+    if (ok) { onAuthSuccess(); }
+    // If not ok, the overlay with "Retry" button is already showing
   });
 }
 

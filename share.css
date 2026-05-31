@@ -41,6 +41,10 @@
 
 .share-form-section { margin-top: 16px; }
 
+.share-manual-area {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--rl); padding: 16px;
+}
 .share-manual-form { display: flex; flex-direction: column; gap: 12px; }
 .share-manual-row  { display: flex; gap: 10px; flex-wrap: wrap; }
 
@@ -59,3 +63,20 @@
 
 .share-attendee-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
 .share-attendee-row .input-group { flex: 1; min-width: 180px; }
+
+/* Theme all share page text/email inputs */
+#share-container input[type="text"],
+#share-container input[type="email"],
+#share-container input[type="date"],
+#share-container input[type="time"],
+#share-container textarea {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r); color: var(--text);
+  font-family: 'DM Mono', monospace; font-size: 13px;
+  padding: 10px 12px; width: 100%; outline: none;
+  transition: border-color 0.15s; color-scheme: dark;
+}
+#share-container input:focus,
+#share-container textarea:focus { border-color: var(--accent); }
+#share-container input::placeholder,
+#share-container textarea::placeholder { color: var(--muted); }

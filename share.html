@@ -9,9 +9,10 @@
   <link rel="stylesheet" href="share.css" />
 </head>
 <body>
-<div class="container" id="share-container">
+<div class="container">
 
   <div id="main-screen" class="share-screen hidden">
+
     <div class="share-hero">
       <div class="wordmark">Scheduler</div>
       <h1 class="share-hero-name" id="share-wordmark">Schedule with <span>Swaraag</span></h1>
@@ -35,70 +36,86 @@
       <div id="cal-month-view" class="cal-view hidden"></div>
     </div>
 
-    <!-- Request form -->
-    <div class="share-form-section">
-      <div class="proposals-header">// request a time</div>
-
-      <div class="share-tabs">
-        <button class="share-tab active" id="tab-claude" onclick="switchTab('claude')">Ask Claude</button>
-        <button class="share-tab" id="tab-manual" onclick="switchTab('manual')">Pick manually</button>
-      </div>
-
-      <!-- Claude tab -->
-      <div id="pane-claude">
-        <div class="input-area" style="margin-bottom:12px">
-          <div class="textarea-wrap">
-            <textarea id="share-input" placeholder="e.g. 'Coffee chat this week, ~30 min, morning preferred'" rows="3"></textarea>
-            <div class="textarea-actions">
-              <div class="textarea-left"></div>
-              <button class="propose-btn" onclick="handleSharePropose()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                Find a time
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Manual tab -->
-      <div id="pane-manual" class="hidden">
-        <div class="share-manual-form">
-          <div class="input-group">
-            <span class="input-label">Event title</span>
-            <input type="text" id="manual-title" placeholder="e.g. Coffee chat" />
-          </div>
-          <div class="share-manual-row">
-            <div class="input-group" style="flex:1">
-              <span class="input-label">Date</span>
-              <input type="date" id="manual-date" />
-            </div>
-            <div class="input-group" style="flex:1">
-              <span class="input-label">Start time</span>
-              <input type="time" id="manual-start" />
-            </div>
-            <div class="input-group" style="flex:1">
-              <span class="input-label">End time</span>
-              <input type="time" id="manual-end" />
-            </div>
-          </div>
-          <div class="input-group">
-            <span class="input-label">Your name</span>
-            <input type="text" id="manual-name" placeholder="So the owner knows who's requesting" />
-          </div>
-          <div class="input-group">
-            <span class="input-label">Description (optional)</span>
-            <textarea id="manual-desc" rows="2" placeholder="What's this meeting about?" style="resize:vertical"></textarea>
-          </div>
-          <button class="propose-btn" style="margin-top:8px;width:100%;justify-content:center" onclick="handleManualSharePropose()">
-            Request this time →
-          </button>
-        </div>
-      </div>
-
-      <div class="error-box" id="share-error"></div>
+    <!-- Mic button -->
+    <div class="mic-center-zone">
+      <button class="mic-center-btn" id="share-mic-btn" onclick="shareToggleRecording()">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="3" width="6" height="11" rx="3"/>
+          <path d="M5 10a7 7 0 0 0 14 0"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+          <line x1="9"  y1="21" x2="15" y2="21"/>
+        </svg>
+      </button>
+      <span class="mic-center-label" id="share-mic-label">tap to speak</span>
     </div>
 
-    <!-- Proposed slot preview -->
+    <!-- Input area -->
+    <div class="input-area">
+      <div class="image-strip hidden" id="share-image-strip">
+        <div class="image-thumb-wrap">
+          <img id="share-image-thumb" src="" alt="" />
+          <button class="image-remove-btn" onclick="shareClearImage()">×</button>
+        </div>
+      </div>
+      <div class="textarea-wrap">
+        <textarea id="share-input" placeholder="Describe what you'd like to schedule — e.g. 'coffee chat this week, ~30 min, morning preferred'" rows="3"></textarea>
+        <div class="textarea-actions">
+          <div class="textarea-left">
+            <button class="action-icon-btn" onclick="document.getElementById('share-image-input').click()" title="Attach image">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+            </button>
+            <input type="file" id="share-image-input" accept="image/*" style="display:none" onchange="shareHandleImage(event)" />
+          </div>
+          <div class="textarea-right">
+            <button class="manual-btn" onclick="shareShowManual()">+ Manual</button>
+            <button class="propose-btn" onclick="handleSharePropose()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              Find a time
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual entry form (hidden until + Manual clicked) -->
+    <div id="share-manual-area" class="share-manual-area hidden">
+      <div class="share-manual-form">
+        <div class="input-group">
+          <span class="input-label">Event title</span>
+          <input type="text" id="manual-title" placeholder="e.g. Coffee chat" />
+        </div>
+        <div class="share-manual-row">
+          <div class="input-group" style="flex:1">
+            <span class="input-label">Date</span>
+            <input type="date" id="manual-date" />
+          </div>
+          <div class="input-group" style="flex:1">
+            <span class="input-label">Start time</span>
+            <input type="time" id="manual-start" />
+          </div>
+          <div class="input-group" style="flex:1">
+            <span class="input-label">End time</span>
+            <input type="time" id="manual-end" />
+          </div>
+        </div>
+        <div class="input-group">
+          <span class="input-label">Description (optional)</span>
+          <textarea id="manual-desc" rows="2" placeholder="What's this meeting about?" style="resize:vertical"></textarea>
+        </div>
+        <div class="confirm-row" style="margin-top:4px">
+          <button class="propose-btn" style="flex:1;justify-content:center" onclick="handleManualSharePropose()">Request this time →</button>
+          <button class="btn btn-ghost" onclick="shareHideManual()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-box" id="share-error"></div>
+
+    <!-- Proposed slot + attendee info -->
     <div id="share-proposals-section" style="display:none">
       <div class="proposals-header">// proposed time</div>
       <div id="share-proposals-list"></div>
@@ -108,7 +125,7 @@
           <input type="text" id="attendee-name" placeholder="Your name" />
         </div>
         <div class="input-group" style="flex:1">
-          <span class="input-label">Your email (optional — for calendar invite)</span>
+          <span class="input-label">Your email</span>
           <input type="email" id="attendee-email" placeholder="you@email.com" />
         </div>
       </div>

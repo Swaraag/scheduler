@@ -13,7 +13,6 @@ window.onload = () => {
   const savedTheme = localStorage.getItem('scheduler_theme');
   if (savedTheme) { try { applyTheme(JSON.parse(savedTheme), false); } catch {} }
 
-  // On narrow screens default to day view
   if (window.innerWidth <= 600) currentView = 'day';
 
   document.addEventListener('keydown', (e) => {
@@ -23,28 +22,24 @@ window.onload = () => {
     if (active?.id === 'revise-input') { e.preventDefault(); handleRevise(); }
   });
 
-  const saved = localStorage.getItem('scheduler_config');
-  if (saved) { config = JSON.parse(saved); showApp(); }
-};
+  // Load Anthropic key from env (via API) — no longer need client-side config
+  const savedKey = localStorage.getItem('scheduler_anth_key');
+  if (savedKey) config.apiKey = savedKey;
 
-// ── CONFIG ─────────────────────────────────────────────────
-function saveConfig() {
-  const clientId = document.getElementById('input-client-id').value.trim();
-  const apiKey   = document.getElementById('input-api-key').value.trim();
-  if (!clientId || !apiKey) { showToast('Fill in both fields', 'error'); return; }
-  config = { clientId, apiKey };
-  localStorage.setItem('scheduler_config', JSON.stringify(config));
   showApp();
-}
+};
 
 function showApp() {
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('app-screen').style.display   = 'flex';
-  document.getElementById('cal-week-view').innerHTML = `
-    <div style="display:flex;align-items:center;gap:12px;padding:40px;justify-content:center;color:var(--muted);font-size:13px;">
-      <div class="spinner"></div>connecting to calendar...
-    </div>`;
   initGoogleAuth();
+  // Fetch Anthropic key from server if we don't have it cached
+  if (!config.apiKey) {
+    fetch('/api/claude-key', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.key) { config.apiKey = d.key; localStorage.setItem('scheduler_anth_key', d.key); } })
+      .catch(() => {});
+  }
 }
 
 // ── COLOR THEMES ───────────────────────────────────────────
@@ -251,7 +246,7 @@ function clearImage() {
 function handlePropose() {
   const text = document.getElementById('main-input').value.trim();
   if (!text && !uploadedImage) { showError('Say or type what you want to schedule.'); return; }
-  if (!gapiToken) { window._tokenClient?.requestAccessToken({ prompt: 'consent' }); return; }
+  if (!gapiToken) { startGoogleSignIn(); return; }
   if (isRecording) stopRecording();
   uploadedImage ? scheduleFromImage(text) : scheduleFromText(text);
 }
@@ -287,16 +282,10 @@ function setCalOverlay(show, text = '', showRetry = false, showSignIn = false, s
     btn.onclick = () => location.reload();
     inner.appendChild(btn);
   }
-  if (showSignIn) {
+  if (showSignIn || showRedirect) {
     const btn = document.createElement('button');
-    btn.className = 'overlay-action-btn retry-btn'; btn.textContent = 'Retry';
-    btn.onclick = () => window._tokenClient?.requestAccessToken({ prompt: 'consent' });
-    inner.appendChild(btn);
-  }
-  if (showRedirect) {
-    const btn = document.createElement('button');
-    btn.className = 'overlay-action-btn retry-btn'; btn.textContent = 'Retry';
-    btn.onclick = () => startGoogleAuthRedirect();
+    btn.className = 'overlay-action-btn'; btn.textContent = 'Sign in with Google';
+    btn.onclick = () => startGoogleSignIn();
     inner.appendChild(btn);
   }
 }

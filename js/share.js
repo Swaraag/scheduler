@@ -11,13 +11,16 @@ const WEEK_END_HOUR   = 22;
 // During local dev, Vercel CLI proxies /api/* so leave as ''.
 const API_BASE = typeof SHARE_API_BASE !== 'undefined' ? SHARE_API_BASE : '';
 
-let ownerName        = 'Me';
-let ownerEvents      = []; // anonymized {start, end, allDay}
-let pendingSlots     = [];
-let shareView        = 'week';
-let shareWeekOffset  = 0;
-let shareDayDate     = new Date();
-let shareMonthOffset = 0;
+let ownerName         = 'Me';
+let ownerEvents       = [];
+let pendingSlots      = [];
+let shareView         = 'week';
+let shareWeekOffset   = 0;
+let shareDayDate      = new Date();
+let shareMonthOffset  = 0;
+let shareRecognition  = null;
+let shareIsRecording  = false;
+let shareUploadedImage = null;
 
 // ── INIT ───────────────────────────────────────────────────
 window.onload = async () => {
@@ -190,20 +193,79 @@ function renderShareMonth() {
   </div>`;
 }
 
-// ── TABS ───────────────────────────────────────────────────
-function switchTab(tab) {
-  document.getElementById('tab-claude').classList.toggle('active', tab === 'claude');
-  document.getElementById('tab-manual').classList.toggle('active', tab === 'manual');
-  document.getElementById('pane-claude').classList.toggle('hidden', tab !== 'claude');
-  document.getElementById('pane-manual').classList.toggle('hidden', tab !== 'manual');
+// ── VOICE ──────────────────────────────────────────────────
+function shareToggleRecording() {
+  shareIsRecording ? shareStopRecording() : shareStartRecording();
+}
+
+function shareStartRecording() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showShareError('Voice not supported. Try Chrome.'); return; }
+  shareRecognition = new SR();
+  shareRecognition.continuous = true; shareRecognition.interimResults = true; shareRecognition.lang = 'en-US';
+  const input = document.getElementById('share-input');
+  const existing = input.value.trim();
+  let finalPart = '';
+  shareRecognition.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalPart += e.results[i][0].transcript + ' ';
+      else interim += e.results[i][0].transcript;
+    }
+    input.value = (existing ? existing + ' ' : '') + finalPart + interim;
+  };
+  shareRecognition.onerror = (e) => { shareStopRecording(); if (e.error !== 'no-speech') showShareError('Voice error: ' + e.error); };
+  shareRecognition.onend   = () => { if (shareIsRecording) shareRecognition.start(); };
+  shareRecognition.start();
+  shareIsRecording = true;
+  document.getElementById('share-mic-btn').classList.add('recording');
+  document.getElementById('share-mic-label').textContent = 'tap to stop';
+}
+
+function shareStopRecording() {
+  if (shareRecognition) { shareRecognition.onend = null; shareRecognition.stop(); }
+  shareIsRecording = false;
+  document.getElementById('share-mic-btn').classList.remove('recording');
+  document.getElementById('share-mic-label').textContent = 'tap to speak';
+}
+
+// ── IMAGE ──────────────────────────────────────────────────
+function shareHandleImage(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const dataUrl = ev.target.result;
+    shareUploadedImage = { base64: dataUrl.split(',')[1], mediaType: file.type };
+    document.getElementById('share-image-thumb').src = dataUrl;
+    document.getElementById('share-image-strip').classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+function shareClearImage() {
+  shareUploadedImage = null;
+  document.getElementById('share-image-input').value = '';
+  document.getElementById('share-image-thumb').src = '';
+  document.getElementById('share-image-strip').classList.add('hidden');
+}
+
+// ── MANUAL FORM ────────────────────────────────────────────
+function shareShowManual() {
+  document.getElementById('share-manual-area').classList.remove('hidden');
+}
+function shareHideManual() {
+  document.getElementById('share-manual-area').classList.add('hidden');
 }
 
 // ── CLAUDE PROPOSE ─────────────────────────────────────────
 async function handleSharePropose() {
   const text = document.getElementById('share-input').value.trim();
-  if (!text) { showShareError("Describe what you'd like to schedule."); return; }
+  if (!text && !shareUploadedImage) { showShareError("Describe or speak what you'd like to schedule."); return; }
+  if (shareIsRecording) shareStopRecording();
   showShareError('');
-  const btn = document.querySelector('#pane-claude .propose-btn');
+  const btn = document.querySelector('.propose-btn');
+  const origText = btn.innerHTML;
   btn.textContent = 'Finding a time...';
 
   const now = new Date();
@@ -216,11 +278,19 @@ Find ONE free slot for the visitor's request that doesn't conflict.
 Respond ONLY with a JSON array with one object: { "title", "start" (ISO 8601), "end" (ISO 8601), "description" }`;
 
   try {
-    // Claude is called directly from the browser using the visitor's own connection.
-    // The Anthropic key is fetched from the API so it never appears in client JS.
     const keyRes = await fetch(`${API_BASE}/api/claude-key`);
     if (!keyRes.ok) throw new Error('Claude not available');
     const { key } = await keyRes.json();
+
+    let userContent;
+    if (shareUploadedImage) {
+      userContent = [
+        { type: 'image', source: { type: 'base64', media_type: shareUploadedImage.mediaType, data: shareUploadedImage.base64 } },
+        { type: 'text', text: text ? `Schedule info from image. Additional context: ${text}` : 'Extract scheduling info from this image and find a free slot.' },
+      ];
+    } else {
+      userContent = text;
+    }
 
     const res = await fetch(CLAUDE_API, {
       method: 'POST',
@@ -230,7 +300,7 @@ Respond ONLY with a JSON array with one object: { "title", "start" (ISO 8601), "
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true',
       },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, system, messages: [{ role: 'user', content: text }] }),
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, system, messages: [{ role: 'user', content: userContent }] }),
     });
     const data = await res.json();
     const raw  = data.content?.[0]?.text?.trim();
@@ -240,9 +310,9 @@ Respond ONLY with a JSON array with one object: { "title", "start" (ISO 8601), "
     if (!Array.isArray(pendingSlots) || !pendingSlots.length) throw new Error('No slots');
     renderShareProposals();
   } catch {
-    showShareError('Could not find a time. Try being more specific or use manual.');
+    showShareError('Could not find a time. Try being more specific or use + Manual.');
   } finally {
-    btn.textContent = 'Find a time';
+    btn.innerHTML = origText;
   }
 }
 
@@ -252,18 +322,16 @@ function handleManualSharePropose() {
   const date  = document.getElementById('manual-date').value;
   const start = document.getElementById('manual-start').value;
   const end   = document.getElementById('manual-end').value;
-  const name  = document.getElementById('manual-name').value.trim();
   const desc  = document.getElementById('manual-desc').value.trim();
-  if (!title || !date || !start || !end) { showShareError('Fill in all fields.'); return; }
+  if (!title || !date || !start || !end) { showShareError('Fill in title, date, and times.'); return; }
   showShareError('');
-  const byLine = `Requested by ${name || 'visitor'}.`;
   pendingSlots = [{
-    title: title + (name ? ` (with ${name})` : ''),
+    title,
     start: `${date}T${start}:00`,
     end:   `${date}T${end}:00`,
-    description: desc ? `${desc}\n\n${byLine}` : byLine,
+    description: desc || '',
   }];
-  if (name) document.getElementById('attendee-name').value = name;
+  shareHideManual();
   renderShareProposals();
 }
 
@@ -289,6 +357,11 @@ async function confirmShareEvent() {
   const name  = document.getElementById('attendee-name').value.trim();
   const email = document.getElementById('attendee-email').value.trim();
 
+  if (!name)  { showShareError('Please enter your name.'); return; }
+  if (!email) { showShareError('Please enter your email so the owner can send you a calendar invite.'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showShareError('Please enter a valid email address.'); return; }
+  showShareError('');
+
   try {
     const res = await fetch(`${API_BASE}/api/book`, {
       method:  'POST',
@@ -313,8 +386,13 @@ async function confirmShareEvent() {
 
 function resetShareUI() {
   pendingSlots = [];
+  shareUploadedImage = null;
+  if (shareIsRecording) shareStopRecording();
   document.getElementById('share-proposals-section').style.display = 'none';
   document.getElementById('share-input').value = '';
+  document.getElementById('share-image-strip').classList.add('hidden');
+  document.getElementById('share-image-input').value = '';
+  shareHideManual();
   showShareError('');
   showScreen('main-screen');
   renderShareView();
