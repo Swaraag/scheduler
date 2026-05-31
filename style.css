@@ -227,6 +227,18 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   color: var(--accent); cursor: pointer; transition: all 0.15s;
 }
 .overlay-action-btn:hover { background: rgba(200,241,53,0.08); }
+.overlay-action-btn:disabled { opacity: 0.5; cursor: default; }
+.request-access-form {
+  display: flex; flex-direction: column; align-items: center;
+  width: 100%; max-width: 280px;
+}
+.request-access-form input {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r); color: var(--text); font-family: 'DM Mono', monospace;
+  font-size: 12px; padding: 8px 12px; outline: none; transition: border-color 0.15s;
+}
+.request-access-form input:focus { border-color: var(--accent); }
+.request-access-form input::placeholder { color: var(--muted); }
 .cal-view { width: 100%; }
 
 /* ── DAY / WEEK SHARED ── */

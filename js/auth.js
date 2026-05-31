@@ -66,6 +66,49 @@ function startGoogleSignIn() {
   location.href = `${API_BASE}/api/auth?return=${encodeURIComponent(returnTo)}`;
 }
 
+// ── REQUEST ACCESS ─────────────────────────────────────────
+function _showRequestAccess() {
+  setCalStatus(false, 'access denied');
+  const overlay = document.getElementById('cal-loading-overlay');
+  const textEl  = document.getElementById('cal-loading-text');
+  const inner   = overlay.querySelector('.cal-loading-inner');
+  overlay.classList.remove('hidden');
+  textEl.textContent = 'Your Google account isn\'t approved yet';
+  inner.querySelectorAll('.overlay-action-btn, .request-access-form').forEach(e => e.remove());
+
+  const form = document.createElement('div');
+  form.className = 'request-access-form';
+  form.innerHTML = `
+    <p style="font-size:12px;color:var(--soft);text-align:center;margin-bottom:12px">
+      Request access and the owner will be notified.
+    </p>
+    <input id="req-name"  type="text"  placeholder="Your name"  style="margin-bottom:8px" />
+    <input id="req-email" type="email" placeholder="Your email" style="margin-bottom:10px" />
+    <button class="overlay-action-btn" id="req-submit-btn" onclick="submitAccessRequest()">Request Access</button>
+  `;
+  inner.appendChild(form);
+}
+
+async function submitAccessRequest() {
+  const name  = document.getElementById('req-name')?.value.trim();
+  const email = document.getElementById('req-email')?.value.trim();
+  if (!email) { return; }
+  const btn = document.getElementById('req-submit-btn');
+  btn.textContent = 'Sending...';
+  btn.disabled = true;
+  try {
+    await fetch('/api/request-access', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ name, email }),
+    });
+  } catch {}
+  const textEl = document.getElementById('cal-loading-text');
+  textEl.textContent = 'Request sent!';
+  const form = document.querySelector('.request-access-form');
+  if (form) form.innerHTML = `<p style="font-size:12px;color:var(--soft);text-align:center">The owner has been notified. You'll be able to sign in once approved.</p>`;
+}
+
 // ── AUTH SUCCESS ───────────────────────────────────────────
 function onAuthSuccess() {
   setCalOverlay(false);
@@ -89,8 +132,12 @@ function initGoogleAuth() {
       return;
     }
     if (error) {
-      setCalOverlay(true, `Sign-in failed: ${error}`, true);
-      setCalStatus(false, 'sign-in failed');
+      if (error === 'access_denied') {
+        _showRequestAccess();
+      } else {
+        setCalOverlay(true, `Sign-in failed: ${error}`, true);
+        setCalStatus(false, 'sign-in failed');
+      }
       return;
     }
   }

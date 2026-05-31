@@ -14,3 +14,4 @@ Thumbs.db
 *.local
 .vercel
 .env*
+env_copy.txt

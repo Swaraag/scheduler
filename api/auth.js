@@ -3,10 +3,11 @@
 // Uses authorization code flow (server-side) — no popups, works everywhere.
 
 export default function handler(req, res) {
+  console.log('ENV CHECK:', Object.keys(process.env).filter(k => k.startsWith('GOOGLE') || k.startsWith('OAUTH')));
   const clientId    = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = process.env.OAUTH_REDIRECT_URI; // e.g. https://swaraag-scheduler.vercel.app/api/callback
+  const redirectUri = process.env.OAUTH_REDIRECT_URI;
   if (!clientId || !redirectUri) {
-    res.status(500).send('OAuth not configured'); return;
+    res.status(500).send(`OAuth not configured — clientId: ${!!clientId}, redirectUri: ${!!redirectUri}`); return;
   }
 
   // Store where to send the user after auth (passed as ?return= query param)
