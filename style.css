@@ -55,7 +55,67 @@ body::before {
 
 .hidden { display: none !important; }
 
-/* ── SETUP SCREEN ── */
+/* ── LANDING PAGE ── */
+.landing-hero {
+  padding: 80px 0 60px;
+  text-align: center;
+}
+.landing-hero .wordmark { justify-content: center; display: flex; margin-bottom: 24px; }
+.landing-hero h1 {
+  font-size: clamp(32px, 5.5vw, 52px);
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  line-height: 1.05; margin-bottom: 20px;
+  max-width: 480px; margin-left: auto; margin-right: auto;
+}
+.landing-sub {
+  font-size: 15px; color: var(--soft); line-height: 1.7;
+  max-width: 520px; margin: 0 auto 28px;
+}
+.landing-badges {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+}
+.landing-badge {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  color: var(--accent-dim); letter-spacing: 0.06em;
+  background: rgba(200,241,53,0.06); border: 1px solid rgba(200,241,53,0.15);
+  border-radius: 20px; padding: 5px 12px;
+}
+.landing-features {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  margin-bottom: 60px;
+}
+.landing-feature {
+  display: flex; gap: 14px; align-items: flex-start;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--rl); padding: 18px;
+  transition: border-color 0.2s;
+}
+.landing-feature:hover { border-color: var(--border2); }
+.landing-feature-icon {
+  flex-shrink: 0; width: 36px; height: 36px; border-radius: 8px;
+  background: rgba(200,241,53,0.08); border: 1px solid rgba(200,241,53,0.15);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+}
+.landing-feature-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px;
+  color: var(--text); margin-bottom: 5px;
+}
+.landing-feature-desc {
+  font-size: 12px; color: var(--soft); line-height: 1.6;
+}
+.landing-signin { margin-bottom: 80px; }
+.landing-signin-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--rl); padding: 28px; max-width: 420px; margin: 0 auto;
+  text-align: center;
+}
+.landing-signin-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 18px;
+  margin-bottom: 12px; color: var(--text);
+}
+
+/* ── SETUP SCREEN (legacy header rule kept for wordmark positioning) ── */
 #setup-screen header {
   padding: 40px 0 32px;
 }
@@ -869,6 +929,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   .container { padding: 0 10px; }
   .main-columns { grid-template-columns: 1fr; }
   .todo-sidebar { position: static; }
+  .landing-features { grid-template-columns: 1fr; }
+  .landing-hero { padding: 50px 0 36px; }
 
   /* Hide week pill — week view is unusable at this width */
   #pill-week { display: none; }

@@ -8,8 +8,10 @@
   <link rel="stylesheet" href="style.css" />
   <script>
     (function() {
-      // Always show app screen — auth is handled server-side now
-      document.documentElement.setAttribute('data-authed', '1');
+      // Show app screen immediately if we have a cached token or session hint
+      const hasSession = localStorage.getItem('scheduler_has_session');
+      const token = localStorage.getItem('scheduler_token');
+      if (hasSession || token) document.documentElement.setAttribute('data-authed', '1');
       const theme = localStorage.getItem('scheduler_theme');
       if (theme) {
         try {
@@ -25,18 +27,92 @@
 
 <div class="container">
 
-  <!-- ── SETUP SCREEN ── -->
+  <!-- ── SETUP SCREEN / LANDING ── -->
   <div id="setup-screen">
-    <header>
+
+    <!-- Hero -->
+    <header class="landing-hero">
       <div class="wordmark">Scheduler</div>
-      <h1>Plan your day<br/>with your <span>voice.</span></h1>
-      <p class="subtitle">// powered by claude + google calendar</p>
+      <h1>Scheduling on<br/><span>autopilot.</span></h1>
+      <p class="landing-sub">Speak, type, or upload an image. Claude proposes what to add and you approve before anything touches your calendar. You stay in control.</p>
+      <div class="landing-badges">
+        <span class="landing-badge">// voice to calendar</span>
+        <span class="landing-badge">// smart todo routing</span>
+        <span class="landing-badge">// powered by claude</span>
+      </div>
     </header>
-    <div class="setup-card">
-      <h2>Connect your calendar</h2>
-      <p class="step-text" style="margin-bottom:20px;color:var(--soft)">Sign in with Google to connect your calendar. Your events are never stored — everything stays between you and Google.</p>
-      <button class="btn btn-primary" onclick="startGoogleSignIn()">Sign in with Google →</button>
+
+    <!-- Feature grid -->
+    <div class="landing-features">
+      <div class="landing-feature">
+        <div class="landing-feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="3" width="6" height="11" rx="3"/>
+            <path d="M5 10a7 7 0 0 0 14 0"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+            <line x1="9" y1="21" x2="15" y2="21"/>
+          </svg>
+        </div>
+        <div>
+          <div class="landing-feature-title">Just speak</div>
+          <div class="landing-feature-desc">Say "dentist Thursday at 3" or "gym every morning" and it shows up on your calendar instantly.</div>
+        </div>
+      </div>
+      <div class="landing-feature">
+        <div class="landing-feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 11 12 14 22 4"/>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          </svg>
+        </div>
+        <div>
+          <div class="landing-feature-title">Todos that know when to become events</div>
+          <div class="landing-feature-desc">"Buy groceries" goes to your todo list. "Call mom at 5pm" goes to the calendar. Claude figures out which is which.</div>
+        </div>
+      </div>
+      <div class="landing-feature">
+        <div class="landing-feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+        </div>
+        <div>
+          <div class="landing-feature-title">Schedule your whole week</div>
+          <div class="landing-feature-desc">Say "find time for my todos this week" and Claude looks at your existing calendar and slots everything in.</div>
+        </div>
+      </div>
+      <div class="landing-feature">
+        <div class="landing-feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5z"/>
+            <path d="M20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+            <path d="M9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5z"/>
+            <path d="M3.5 14H5v1.5c0 .83-.67 1.5-1.5 1.5S2 16.33 2 15.5 2.67 14 3.5 14z"/>
+            <path d="M14 14.5c0-.83.67-1.5 1.5-1.5h5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-5c-.83 0-1.5-.67-1.5-1.5z"/>
+            <path d="M15.5 19H14v1.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5-.67-1.5-1.5-1.5z"/>
+            <path d="M10 9.5C10 8.67 9.33 8 8.5 8h-5C2.67 8 2 8.67 2 9.5S2.67 11 3.5 11h5c.83 0 1.5-.67 1.5-1.5z"/>
+            <path d="M8.5 5H10V3.5C10 2.67 9.33 2 8.5 2S7 2.67 7 3.5 7.67 5 8.5 5z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="landing-feature-title">Upload anything</div>
+          <div class="landing-feature-desc">Screenshot a flyer, a syllabus, or a group chat. Claude reads it and schedules whatever's in it.</div>
+        </div>
+      </div>
     </div>
+
+    <!-- Sign in -->
+    <div class="landing-signin" id="landing-signin">
+      <div class="landing-signin-card">
+        <div class="landing-signin-title">Get started</div>
+        <p class="step-text" style="color:var(--soft);margin-bottom:20px;line-height:1.7">Connect your Google Calendar to begin. Claude suggests, you approve. Nothing is added without your confirmation and your events are never stored on our servers.</p>
+        <button class="btn btn-primary" onclick="startGoogleSignIn()">Sign in with Google →</button>
+      </div>
+    </div>
+
   </div>
 
   <!-- ── MAIN APP SCREEN ── -->

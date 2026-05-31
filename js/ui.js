@@ -28,10 +28,19 @@ window.onload = () => {
   const savedKey = localStorage.getItem('scheduler_anth_key');
   if (savedKey) config.apiKey = savedKey;
 
-  showApp();
+  // Only go straight to app if there's reason to believe a session exists.
+  // Otherwise show the landing page and wait for the user to sign in.
+  const hasSession = localStorage.getItem('scheduler_has_session');
+  const hasToken   = localStorage.getItem('scheduler_token');
+  const hasHash    = location.hash && location.hash.includes('access_token');
+  if (hasSession || hasToken || hasHash) {
+    showApp();
+  }
+  // else: landing page stays visible until startGoogleSignIn() → onAuthSuccess() → showApp()
 };
 
 function showApp() {
+  document.documentElement.setAttribute('data-authed', '1');
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('app-screen').style.display   = 'flex';
   initGoogleAuth();

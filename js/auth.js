@@ -61,8 +61,18 @@ function loadSavedToken() {
 
 // ── SIGN IN ────────────────────────────────────────────────
 function startGoogleSignIn() {
+  // If app screen isn't visible yet (user on landing page), show app first
+  const appScreen = document.getElementById('app-screen');
+  if (appScreen && appScreen.style.display !== 'flex') {
+    document.documentElement.setAttribute('data-authed', '1');
+    document.getElementById('setup-screen').style.display = 'none';
+    appScreen.style.display = 'flex';
+    // Small delay so the DOM is visible before we manipulate the overlay
+    setTimeout(() => startGoogleSignIn(), 50);
+    return;
+  }
+
   // Show an email pre-check form before redirecting to Google.
-  // This prevents non-test-users from hitting Google's unrecoverable error page.
   const overlay = document.getElementById('cal-loading-overlay');
   const textEl  = document.getElementById('cal-loading-text');
   const inner   = overlay.querySelector('.cal-loading-inner');
@@ -174,9 +184,20 @@ async function submitAccessRequest() {
 // ── AUTH SUCCESS ───────────────────────────────────────────
 function onAuthSuccess() {
   localStorage.setItem('scheduler_has_session', '1');
+  // Ensure app screen is visible (handles new users coming from the landing page)
+  document.documentElement.setAttribute('data-authed', '1');
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display   = 'flex';
   document.getElementById('settings-btn')?.classList.remove('hidden');
   setCalOverlay(false);
   setCalStatus(true, 'calendar connected');
+  // Fetch Anthropic key if not cached
+  if (!config.apiKey) {
+    fetch('/api/claude-key', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.key) { config.apiKey = d.key; localStorage.setItem('scheduler_anth_key', d.key); } })
+      .catch(() => {});
+  }
   fetchCalendarList().then(() => { fetchEvents7(); fetchEventsYear(); });
 }
 
