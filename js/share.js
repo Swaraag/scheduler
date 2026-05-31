@@ -378,17 +378,33 @@ function handleManualSharePropose() {
 // ── RENDER PROPOSALS ───────────────────────────────────────
 function renderShareProposals() {
   renderShareView();
-  const fmtDate = iso => new Date(iso).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
-  const fmtTime = iso => iso.includes('T') ? new Date(iso).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' }) : '';
-  document.getElementById('share-proposals-list').innerHTML = pendingSlots.map(ev => `
+  const toDate = iso => iso ? iso.slice(0,10) : '';
+  const toTime = iso => iso && iso.includes('T') ? iso.slice(11,16) : '';
+  document.getElementById('share-proposals-list').innerHTML = pendingSlots.map((ev, i) => `
     <div class="event-card pending">
       <div class="event-info">
-        <div style="font-family:'Syne',sans-serif;font-weight:600;font-size:14px;margin-bottom:6px">${ev.title}</div>
-        <div style="font-size:12px;color:var(--accent)">${fmtDate(ev.start)}  ·  ${fmtTime(ev.start)} – ${fmtTime(ev.end)}</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:600;font-size:14px;margin-bottom:8px">${ev.title}</div>
+        <div class="event-dt-group">
+          <span class="event-dt-label">from</span>
+          <input class="event-date-input" type="date" value="${toDate(ev.start)}" onchange="updateShareSlotDT(${i},'start','date',this.value)" />
+          <input class="event-time-input" type="time" value="${toTime(ev.start)}" onchange="updateShareSlotDT(${i},'start','time',this.value)" />
+          <span class="event-dt-sep">→</span>
+          <input class="event-date-input" type="date" value="${toDate(ev.end)}" onchange="updateShareSlotDT(${i},'end','date',this.value)" />
+          <input class="event-time-input" type="time" value="${toTime(ev.end)}" onchange="updateShareSlotDT(${i},'end','time',this.value)" />
+        </div>
         ${ev.description ? `<div class="event-desc">${ev.description}</div>` : ''}
       </div>
     </div>`).join('');
   document.getElementById('share-proposals-section').style.display = '';
+}
+
+function updateShareSlotDT(i, field, part, value) {
+  if (!pendingSlots[i]) return;
+  const current = pendingSlots[i][field] || '';
+  const date = current.slice(0,10);
+  const time = current.slice(11,16) || '00:00';
+  pendingSlots[i][field] = part === 'date' ? `${value}T${time}:00` : `${date}T${value}:00`;
+  renderShareView();
 }
 
 // ── CONFIRM / BOOK ─────────────────────────────────────────
@@ -401,6 +417,10 @@ async function confirmShareEvent() {
   if (!email) { showShareError('Please enter your email so the owner can send you a calendar invite.'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showShareError('Please enter a valid email address.'); return; }
   showShareError('');
+
+  const sendBtn = document.querySelector('#share-proposals-section .btn-confirm');
+  if (sendBtn) { sendBtn.textContent = 'Sending...'; sendBtn.disabled = true; }
+  shareSetLoading(true, 'sending request...');
 
   try {
     const res = await fetch(`${API_BASE}/api/book`, {
@@ -421,6 +441,9 @@ async function confirmShareEvent() {
     showScreen('success-screen');
   } catch (e) {
     showShareError('Failed to book: ' + e.message);
+    if (sendBtn) { sendBtn.textContent = 'Send Request →'; sendBtn.disabled = false; }
+  } finally {
+    shareSetLoading(false);
   }
 }
 

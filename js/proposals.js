@@ -140,12 +140,29 @@ async function callClaude(messages) {
     const data = await res.json();
     const raw  = data.content?.[0]?.text?.trim();
     if (!raw) throw new Error('Empty response from Claude');
-    proposedEvents = extractJsonArray(raw);
-    if (!proposedEvents.length)
+    const newEvents = extractJsonArray(raw);
+    if (!newEvents.length)
       throw new Error('No events could be scheduled. Try being more specific.');
+    // Append new proposals to any existing ones (don't clobber unconfirmed proposals)
+    proposedEvents = [...proposedEvents, ...newEvents];
+    saveProposedEvents();
     setLoading(false);
     renderProposals();
   } catch (e) { setLoading(false); showError('Error: ' + e.message); }
+}
+
+function saveProposedEvents() {
+  try { localStorage.setItem('scheduler_proposals', JSON.stringify(proposedEvents)); } catch {}
+}
+
+function loadProposedEvents() {
+  try {
+    const saved = localStorage.getItem('scheduler_proposals');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length) proposedEvents = parsed;
+    }
+  } catch {}
 }
 
 // ── MANUAL ENTRY ───────────────────────────────────────────
@@ -272,21 +289,25 @@ function updateProposalDT(i, field, part, value) {
   const date = current.slice(0,10);
   const time = current.slice(11,16) || '00:00';
   proposedEvents[i][field] = part === 'date' ? `${value}T${time}:00` : `${date}T${value}:00`;
+  saveProposedEvents();
   _refreshCalWithProposals();
 }
 
 function acceptProposal(i) {
   proposedEvents[i]._state = proposedEvents[i]._state === 'accepted' ? 'pending' : 'accepted';
+  saveProposedEvents();
   renderProposals();
 }
 
 function rejectProposal(i) {
   proposedEvents[i]._state = proposedEvents[i]._state === 'rejected' ? 'pending' : 'rejected';
+  saveProposedEvents();
   renderProposals();
 }
 
 function updateProposal(i, field, value) {
   proposedEvents[i][field] = value;
+  saveProposedEvents();
   _refreshCalWithProposals();
 }
 
@@ -333,6 +354,7 @@ async function confirmEvents() {
   setLoading(false);
   await fetchEvents7();
   resetUI();
+  localStorage.removeItem('scheduler_proposals');
   showToast(`${added} event${added>1?'s':''} added to Google Calendar ✓`, 'success');
   updateMemoryAfterConfirm(toAdd);
 }
@@ -550,6 +572,8 @@ async function handleRevise() {
   if (!revision) { showError('Describe what you want to change.'); return; }
   const currentProposals = proposedEvents.map(e => `- "${e.title}" from ${e.start} to ${e.end}`).join('\n');
   document.getElementById('revise-input').value = '';
+  // Clear proposals before revising so callClaude replaces them cleanly
   proposedEvents = [];
+  saveProposedEvents();
   await callClaude([{ role: 'user', content: `I previously asked you to schedule some things and you proposed:\n${currentProposals}\n\nI want to make the following changes: ${revision}` }]);
 }

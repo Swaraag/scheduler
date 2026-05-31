@@ -913,6 +913,12 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .modal-btns { display: flex; gap: 10px; flex-wrap: wrap; }
 .modal-btns .btn { flex: 1; }
 
+/* ── SCHEDULE ALL POPUP ── */
+.schedule-all-box { max-width: 440px; }
+.schedule-all-mic-row { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 14px; }
+.schedule-all-mic { width: 44px; height: 44px; font-size: 18px; }
+.schedule-all-image-strip { margin-bottom: 10px; }
+
 /* ── TOAST ── */
 .toast {
   position: fixed; bottom: 30px; left: 50%;

@@ -65,8 +65,8 @@
 .share-attendee-row .input-group { flex: 1; min-width: 180px; }
 
 /* Theme all share page inputs — broad selector to catch email/date/time browser overrides */
-#share-container input,
-#share-container textarea {
+#main-screen input:not(.event-date-input):not(.event-time-input),
+#main-screen textarea {
   background: var(--surface2) !important; border: 1px solid var(--border) !important;
   border-radius: var(--r); color: var(--text) !important;
   font-family: 'DM Mono', monospace; font-size: 13px;
@@ -74,7 +74,14 @@
   transition: border-color 0.15s; color-scheme: dark;
   -webkit-appearance: none; appearance: none;
 }
-#share-container input:focus,
-#share-container textarea:focus { border-color: var(--accent); }
-#share-container input::placeholder,
-#share-container textarea::placeholder { color: var(--muted); }
+#main-screen input:not(.event-date-input):not(.event-time-input):focus,
+#main-screen textarea:focus { border-color: var(--accent) !important; }
+#main-screen input::placeholder,
+#main-screen textarea::placeholder { color: var(--muted); }
+
+/* Proposal date/time pickers in share proposals — themed but keep their own widths */
+#main-screen .event-date-input,
+#main-screen .event-time-input {
+  background: var(--surface2) !important; border: 1px solid var(--border) !important;
+  color: var(--text) !important; color-scheme: dark; -webkit-appearance: none; appearance: none;
+}

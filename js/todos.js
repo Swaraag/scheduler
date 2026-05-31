@@ -93,16 +93,116 @@ function addTodoFromInput() {
   input.value = '';
 }
 
-// ── SCHEDULE TODOS VIA CLAUDE ───────────────────────────────
-async function scheduleTodos() {
+// ── SCHEDULE ALL POPUP ──────────────────────────────────────
+let _scheduleAllRecognition = null;
+let _scheduleAllRecording   = false;
+let _scheduleAllImage       = null;
+
+function openScheduleAllPopup() {
+  if (!gapiToken) { startGoogleSignIn(); return; }
+  const pending = todos.filter(t => !t.done && !t.scheduled);
+  if (!pending.length) { showToast('No pending todos to schedule', 'error'); return; }
+  document.getElementById('schedule-all-modal').classList.remove('hidden');
+  document.getElementById('modal-backdrop').classList.remove('hidden');
+  document.getElementById('schedule-all-input').value = '';
+  scheduleAllClearImage();
+}
+
+function closeScheduleAllPopup() {
+  document.getElementById('schedule-all-modal').classList.add('hidden');
+  document.getElementById('modal-backdrop').classList.add('hidden');
+  if (_scheduleAllRecording) scheduleAllStopRecording();
+}
+
+function scheduleAllToggleRecording() {
+  _scheduleAllRecording ? scheduleAllStopRecording() : scheduleAllStartRecording();
+}
+
+function scheduleAllStartRecording() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showError('Voice not supported. Try Chrome.'); return; }
+  _scheduleAllRecognition = new SR();
+  _scheduleAllRecognition.continuous = true; _scheduleAllRecognition.interimResults = true; _scheduleAllRecognition.lang = 'en-US';
+  const input = document.getElementById('schedule-all-input');
+  const existing = input.value.trim();
+  let finalPart = '';
+  _scheduleAllRecognition.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalPart += e.results[i][0].transcript + ' ';
+      else interim += e.results[i][0].transcript;
+    }
+    input.value = (existing ? existing + ' ' : '') + finalPart + interim;
+  };
+  _scheduleAllRecognition.onerror = () => scheduleAllStopRecording();
+  _scheduleAllRecognition.onend   = () => { if (_scheduleAllRecording) _scheduleAllRecognition.start(); };
+  _scheduleAllRecognition.start();
+  _scheduleAllRecording = true;
+  document.getElementById('schedule-all-mic-btn').classList.add('recording');
+  document.getElementById('schedule-all-mic-label').textContent = 'tap to stop';
+}
+
+function scheduleAllStopRecording() {
+  if (_scheduleAllRecognition) { _scheduleAllRecognition.onend = null; _scheduleAllRecognition.stop(); }
+  _scheduleAllRecording = false;
+  document.getElementById('schedule-all-mic-btn').classList.remove('recording');
+  document.getElementById('schedule-all-mic-label').textContent = 'tap to speak';
+}
+
+function scheduleAllHandleImage(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const dataUrl = ev.target.result;
+    _scheduleAllImage = { base64: dataUrl.split(',')[1], mediaType: file.type };
+    document.getElementById('schedule-all-image-thumb').src = dataUrl;
+    document.getElementById('schedule-all-image-strip').classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+function scheduleAllClearImage() {
+  _scheduleAllImage = null;
+  const inp = document.getElementById('schedule-all-image-input');
+  if (inp) inp.value = '';
+  const thumb = document.getElementById('schedule-all-image-thumb');
+  if (thumb) thumb.src = '';
+  document.getElementById('schedule-all-image-strip')?.classList.add('hidden');
+}
+
+async function scheduleAllWithContext() {
+  const context = document.getElementById('schedule-all-input').value.trim();
+  if (!context && !_scheduleAllImage) { showError('Add some context or use "Let Claude decide".'); return; }
+  closeScheduleAllPopup();
+  await _runScheduleAll(context, _scheduleAllImage);
+}
+
+async function scheduleAllAuto() {
+  closeScheduleAllPopup();
+  await _runScheduleAll('', null);
+}
+
+async function _runScheduleAll(context, imageData) {
   const pending = todos.filter(t => !t.done && !t.scheduled);
   if (!pending.length) { showToast('No pending todos to schedule', 'error'); return; }
   const todoList = pending.map(t => `- ${t.text}`).join('\n');
-  const input    = `Schedule my pending todos for this week:\n${todoList}`;
-  // Feed into normal scheduling pipeline
+  const contextNote = context ? `\nContext from user: ${context}` : '';
   setLoading(true, 'scheduling your todos...');
   await fetchEvents7();
-  await callClaude([{ role: 'user', content: input }], true);
+  if (imageData) {
+    const content = [
+      { type: 'image', source: { type: 'base64', media_type: imageData.mediaType, data: imageData.base64 } },
+      { type: 'text', text: `Schedule these todos for this week:${contextNote}\n${todoList}` },
+    ];
+    await callClaude([{ role: 'user', content }]);
+  } else {
+    await callClaude([{ role: 'user', content: `Schedule these todos for this week:${contextNote}\n${todoList}` }]);
+  }
+}
+
+// ── SCHEDULE TODOS VIA CLAUDE (legacy direct call) ──────────
+async function scheduleTodos() {
+  openScheduleAllPopup();
 }
 
 // ── ROUTING: CLAUDE DECIDES CALENDAR VS TODO ────────────────

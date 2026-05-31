@@ -24,6 +24,8 @@ window.onload = () => {
 
   loadTodos();
   renderTodos();
+  loadProposedEvents();
+  if (proposedEvents.length) renderProposals();
 
   const savedKey = localStorage.getItem('scheduler_anth_key');
   if (savedKey) config.apiKey = savedKey;
@@ -126,6 +128,11 @@ function saveMemory() {
 function closeSettings() {
   document.getElementById('settings-modal').classList.add('hidden');
   document.getElementById('modal-backdrop').classList.add('hidden');
+}
+
+function closeAnyModal() {
+  if (!document.getElementById('settings-modal').classList.contains('hidden')) { closeSettings(); return; }
+  if (!document.getElementById('schedule-all-modal').classList.contains('hidden')) { closeScheduleAllPopup(); return; }
 }
 
 function showResetConfirm() {
@@ -275,6 +282,7 @@ function handlePropose() {
 function resetUI() {
   proposedEvents = [];
   selectedProposals.clear();
+  localStorage.removeItem('scheduler_proposals');
   document.getElementById('main-input').value = '';
   document.getElementById('proposals-section').classList.remove('visible');
   clearImage();
