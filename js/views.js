@@ -172,11 +172,14 @@ function proposedBlock(ev, idx) {
   }));
   return `<div class="tg-event proposed ${stateClass}" style="top:${top}px;height:${height}px" id="prop-block-${idx}"
     onclick="showEventPopup(event,'${data}')">
-    <div class="tg-event-title">${ev.title}</div>
-    <div class="prop-block-actions">
-      <button class="prop-block-btn accept" onclick="event.stopPropagation();acceptProposal(${idx})">✓</button>
-      <button class="prop-block-btn reject" onclick="event.stopPropagation();rejectProposal(${idx})">✗</button>
+    <div class="prop-block-top">
+      <div class="prop-block-actions">
+        <button class="prop-block-btn accept" onclick="event.stopPropagation();acceptProposal(${idx})">✓</button>
+        <button class="prop-block-btn reject" onclick="event.stopPropagation();rejectProposal(${idx})">✗</button>
+      </div>
+      <div class="tg-event-title">${ev.title}</div>
     </div>
+    <div class="prop-resize-handle"></div>
   </div>`;
 }
 
@@ -189,8 +192,9 @@ function scrollToNow(el) {
 }
 
 // ── HOVER-TO-OPEN + DRAG-TO-RESCHEDULE ────────────────────
-let _hoverTimer     = null;
+let _hoverTimer      = null;
 let _hoverLeaveTimer = null;
+let _todoDragging    = false; // set true while a todo→calendar drag is active
 
 function attachGridInteractions(gridBody) {
   // Use mouseover/mouseout (they bubble) so entering from any side/child works
@@ -198,6 +202,7 @@ function attachGridInteractions(gridBody) {
     const block = e.target.closest('.tg-event');
     if (!block) return;
     if (block.contains(e.relatedTarget)) return;
+    if (block.classList.contains('proposed')) block.style.zIndex = '20';
     clearTimeout(_hoverTimer);
     clearTimeout(_hoverLeaveTimer);
     // If this block's popup is already open (from hover-into-popup), de-solidify back to grayed
@@ -209,6 +214,7 @@ function attachGridInteractions(gridBody) {
     }
     _hoverTimer = setTimeout(() => {
       if (block.dataset.dragging) return;
+      if (_todoDragging) return;
       const r = block.getBoundingClientRect();
       const encoded = block.getAttribute('onclick')?.match(/showEventPopup\(event,'([^']+)'\)/)?.[1];
       if (!encoded) return;
@@ -220,8 +226,8 @@ function attachGridInteractions(gridBody) {
   gridBody.addEventListener('mouseout', (e) => {
     const block = e.target.closest('.tg-event');
     if (!block) return;
-    // Only treat as "leave" if we're going outside the block
     if (block.contains(e.relatedTarget)) return;
+    if (block.classList.contains('proposed')) block.style.zIndex = '';
     clearTimeout(_hoverTimer);
     _hoverLeaveTimer = setTimeout(() => _closeHoverPopup(), 200);
   });
@@ -249,12 +255,63 @@ function attachGridInteractions(gridBody) {
     });
   }
 
-  // Drag: only on proposed blocks
+  // Resize: drag the bottom handle of a proposed block
+  gridBody.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.prop-resize-handle')) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    const block = e.target.closest('.tg-event.proposed');
+    if (!block) return;
+    const idx = parseInt(block.id.replace('prop-block-', ''));
+    if (isNaN(idx)) return;
+
+    const ev      = proposedEvents[idx];
+    const col     = block.closest('.tg-day-col');
+    if (!col) return;
+
+    const origHeight = parseFloat(block.style.height);
+    const startY     = e.clientY;
+    const pad = n => String(n).padStart(2, '0');
+    const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+
+    clearTimeout(_hoverTimer);
+    block.dataset.dragging = '1';
+
+    const onMove = (me) => {
+      const dy = me.clientY - startY;
+      // Snap to 15-min increments, min 15 min (HOUR_PX/4)
+      const deltaMins   = Math.round((dy / HOUR_PX) * 60 / 15) * 15;
+      const newHeightPx = Math.max(HOUR_PX / 4, origHeight + (deltaMins / 60) * HOUR_PX);
+      block.style.height = `${newHeightPx}px`;
+    };
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      delete block.dataset.dragging;
+
+      const newHeightPx = parseFloat(block.style.height);
+      const newDurMins  = Math.round((newHeightPx / HOUR_PX) * 60 / 15) * 15;
+      const newEndDate  = new Date(ev.start);
+      newEndDate.setMinutes(newEndDate.getMinutes() + newDurMins);
+
+      proposedEvents[idx].end = fmt(newEndDate);
+      saveProposedEvents();
+      _refreshCalWithProposals();
+      renderProposals();
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // Move drag: only on proposed blocks (not on buttons or resize handle)
   gridBody.addEventListener('mousedown', (e) => {
     const block = e.target.closest('.tg-event.proposed');
     if (!block) return;
-    // Don't start drag if clicking a button
     if (e.target.closest('.prop-block-btn')) return;
+    if (e.target.closest('.prop-resize-handle')) return;
 
     const idx = parseInt(block.id.replace('prop-block-', ''));
     if (isNaN(idx)) return;
@@ -267,11 +324,9 @@ function attachGridInteractions(gridBody) {
     const endMs      = new Date(ev.end).getTime();
     const durationMs = endMs - startMs;
 
-    const colRect    = col.getBoundingClientRect();
     const startY     = e.clientY;
     let   ghost      = null;
     let   dragging   = false;
-    let   cancelled  = false;
 
     const onMove = (me) => {
       const dy = me.clientY - startY;
@@ -281,7 +336,6 @@ function attachGridInteractions(gridBody) {
         dragging = true;
         clearTimeout(_hoverTimer);
         block.dataset.dragging = '1';
-        // Create ghost
         ghost = document.createElement('div');
         ghost.className = 'drag-ghost';
         ghost.style.height = block.style.height;
@@ -289,21 +343,19 @@ function attachGridInteractions(gridBody) {
         block.style.opacity = '0.3';
       }
 
-      // Snap to 15-min increments
-      const deltaMins  = Math.round((dy / HOUR_PX) * 60 / 15) * 15;
-      const newTopPx   = Math.max(0, parseFloat(block.style.top) + (deltaMins / 60) * HOUR_PX);
-      ghost.style.top  = `${newTopPx}px`;
+      const deltaMins = Math.round((dy / HOUR_PX) * 60 / 15) * 15;
+      const newTopPx  = Math.max(0, parseFloat(block.style.top) + (deltaMins / 60) * HOUR_PX);
+      ghost.style.top = `${newTopPx}px`;
     };
 
-    const onUp = (me) => {
+    const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
 
       if (!dragging) { delete block.dataset.dragging; return; }
 
-      // Compute new start from ghost position
-      const newTopPx   = parseFloat(ghost.style.top);
-      const newStartH  = newTopPx / HOUR_PX + WEEK_START_HOUR;
+      const newTopPx     = parseFloat(ghost.style.top);
+      const newStartH    = newTopPx / HOUR_PX + WEEK_START_HOUR;
       const newStartDate = new Date(ev.start);
       newStartDate.setHours(Math.floor(newStartH), Math.round((newStartH % 1) * 60), 0, 0);
       const newEndDate   = new Date(newStartDate.getTime() + durationMs);
@@ -318,8 +370,8 @@ function attachGridInteractions(gridBody) {
       delete block.dataset.dragging;
       block.style.opacity = '';
 
+      saveProposedEvents();
       _refreshCalWithProposals();
-      // Re-render the proposal card date/time fields
       renderProposals();
     };
 

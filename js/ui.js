@@ -104,15 +104,20 @@ function openSettings() {
   // Populate memory textarea
   const mem = localStorage.getItem('scheduler_memory') || '';
   document.getElementById('memory-input').value = mem;
+  _memorySavedValue = mem;
+  document.getElementById('memory-save-btn').classList.add('hidden');
   updateMemoryCharCount(mem.length);
 }
 
 const MEMORY_MAX = 500;
+let _memorySavedValue = '';
 
 function onMemoryInput() {
-  const el  = document.getElementById('memory-input');
+  const el = document.getElementById('memory-input');
   if (el.value.length > MEMORY_MAX) el.value = el.value.slice(0, MEMORY_MAX);
   updateMemoryCharCount(el.value.length);
+  const dirty = el.value !== _memorySavedValue;
+  document.getElementById('memory-save-btn').classList.toggle('hidden', !dirty);
 }
 
 function updateMemoryCharCount(n) {
@@ -123,9 +128,25 @@ function updateMemoryCharCount(n) {
 function saveMemory() {
   const val = document.getElementById('memory-input').value.slice(0, MEMORY_MAX);
   localStorage.setItem('scheduler_memory', val);
+  _memorySavedValue = val;
+  document.getElementById('memory-save-btn').classList.add('hidden');
 }
 
-function closeSettings() {
+function _memoryIsDirty() {
+  const el = document.getElementById('memory-input');
+  return el && el.value !== _memorySavedValue;
+}
+
+function closeSettings(force) {
+  if (!force && _memoryIsDirty()) {
+    if (!confirm('You have unsaved changes to Memory. Save before closing?')) {
+      // Discard — revert to saved value and close
+      document.getElementById('memory-input').value = _memorySavedValue;
+      document.getElementById('memory-save-btn').classList.add('hidden');
+    } else {
+      saveMemory();
+    }
+  }
   document.getElementById('settings-modal').classList.add('hidden');
   document.getElementById('modal-backdrop').classList.add('hidden');
 }

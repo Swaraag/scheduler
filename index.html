@@ -257,7 +257,7 @@
       <div class="confirm-row">
         <button class="btn btn-confirm"    onclick="confirmEvents()">Confirm All →</button>
         <button class="btn btn-revise"     onclick="toggleRevise()">Revise</button>
-        <button class="btn btn-ghost"      onclick="resetUI()">Discard</button>
+        <button class="btn btn-ghost"      onclick="resetUI()"> Discard All</button>
       </div>
     </div>
 
@@ -302,8 +302,8 @@
 <!-- Schedule All popup -->
 <div id="schedule-all-modal" class="modal hidden">
   <div class="modal-box schedule-all-box">
-    <div class="modal-title">Schedule all todos</div>
-    <p class="modal-desc">Add context for when and how to schedule, or let Claude decide automatically.</p>
+    <div class="modal-title" id="schedule-modal-title">Schedule all todos</div>
+    <p class="modal-desc" id="schedule-modal-desc">Optionally add context for when and how to schedule, then let Claude propose times.</p>
 
     <div class="schedule-all-mic-row">
       <button class="mic-center-btn schedule-all-mic" id="schedule-all-mic-btn" onclick="scheduleAllToggleRecording()">
@@ -325,7 +325,7 @@
     </div>
 
     <div class="textarea-wrap" style="margin-bottom:10px">
-      <textarea id="schedule-all-input" placeholder="Optional: add context — e.g. 'keep mornings free', 'prefer evenings', 'nothing on weekends'" rows="3"></textarea>
+      <textarea id="schedule-all-input" placeholder="Optional: add context for how Claude should schedule — e.g. 'keep mornings free', 'prefer evenings', 'nothing on weekends'" rows="3"></textarea>
       <div class="textarea-actions">
         <div class="textarea-left">
           <button class="action-icon-btn" onclick="document.getElementById('schedule-all-image-input').click()" title="Attach image">
@@ -341,11 +341,10 @@
     </div>
 
     <div class="modal-btns">
-      <button class="btn btn-confirm" onclick="scheduleAllWithContext()">
+      <button class="btn btn-confirm" onclick="scheduleAllPropose()">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        Propose with context
+        Propose
       </button>
-      <button class="btn btn-primary" onclick="scheduleAllAuto()">Let Claude decide</button>
       <button class="btn btn-ghost" onclick="closeScheduleAllPopup()">Cancel</button>
     </div>
   </div>
@@ -369,7 +368,10 @@
 
     <div class="settings-section">
       <div class="settings-section-label">Memory <span id="memory-char-count" class="memory-char-count"></span></div>
-      <textarea id="memory-input" class="memory-textarea" placeholder="Claude will remember preferences here — e.g. 'prefers evening workouts, no meetings before 9am'..." rows="3" oninput="onMemoryInput()" onblur="saveMemory()"></textarea>
+      <textarea id="memory-input" class="memory-textarea" placeholder="Claude will remember preferences here — e.g. 'prefers evening workouts, no meetings before 9am'..." rows="3" oninput="onMemoryInput()"></textarea>
+      <div class="memory-save-row">
+        <button class="btn btn-ghost memory-save-btn hidden" id="memory-save-btn" onclick="saveMemory()">Save</button>
+      </div>
     </div>
 
     <div id="reset-confirm-area" class="hidden">

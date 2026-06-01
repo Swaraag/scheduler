@@ -236,13 +236,13 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .todo-list::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
 .todo-item {
   display: flex; align-items: flex-start; gap: 8px;
-  padding: 7px 14px; transition: background 0.1s; cursor: default;
+  padding: 10px 14px; transition: background 0.1s; cursor: default;
 }
 .todo-item:hover { background: var(--surface2); }
 .todo-item.done .todo-text { text-decoration: line-through; color: var(--muted); }
 .todo-item.scheduled .todo-text { color: var(--soft); }
 .todo-check {
-  flex-shrink: 0; width: 16px; height: 16px; border-radius: 4px;
+  flex-shrink: 0; width: 17px; height: 17px; border-radius: 4px;
   border: 1.5px solid var(--border2); background: transparent;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   transition: all 0.15s; margin-top: 1px; color: var(--confirm);
@@ -253,6 +253,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   flex: 1; font-family: 'DM Mono', monospace; font-size: 12px;
   color: var(--text); line-height: 1.45; word-break: break-word;
 }
+.todo-text:not(.editing) { cursor: text; }
 .todo-scheduled-badge {
   display: inline-block; font-size: 9px; background: rgba(61,214,140,0.12);
   color: var(--confirm); border-radius: 3px; padding: 1px 5px;
@@ -260,11 +261,47 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 }
 .todo-delete {
   flex-shrink: 0; opacity: 0; background: none; border: none;
-  color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1;
-  padding: 0 2px; transition: opacity 0.1s, color 0.1s;
+  color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1;
+  padding: 0 3px; margin-top: 0; transition: opacity 0.1s, color 0.1s;
 }
 .todo-item:hover .todo-delete { opacity: 1; }
 .todo-delete:hover { color: var(--red); }
+.todo-drag-handle {
+  flex-shrink: 0; opacity: 0; background: none; border: none;
+  color: var(--muted); cursor: grab; padding: 0 3px; margin-top: 1px;
+  display: flex; align-items: flex-start; transition: opacity 0.1s, color 0.1s;
+}
+.todo-drag-handle:active { cursor: grabbing; }
+.todo-item:hover .todo-drag-handle { opacity: 1; }
+.todo-drag-handle:hover { color: var(--soft); }
+.todo-schedule-one-btn {
+  flex-shrink: 0; opacity: 0; background: none; border: none;
+  color: var(--muted); cursor: pointer; padding: 0 3px; margin-top: 1px;
+  display: flex; align-items: flex-start; transition: opacity 0.1s, color 0.1s;
+}
+.todo-item:hover .todo-schedule-one-btn { opacity: 1; }
+.todo-schedule-one-btn:hover { color: var(--accent); }
+/* Inline todo edit */
+.todo-edit-wrap { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.todo-edit-input {
+  width: 100%; background: var(--surface3); border: 1px solid var(--accent);
+  border-radius: var(--r); color: var(--text); font-family: 'DM Mono', monospace;
+  font-size: 12px; padding: 5px 8px; outline: none; line-height: 1.45;
+}
+.todo-edit-actions { display: flex; gap: 6px; }
+.todo-edit-save, .todo-edit-cancel {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  border: none; border-radius: var(--r); padding: 4px 10px; cursor: pointer;
+  transition: all 0.15s;
+}
+.todo-edit-save { background: var(--accent); color: #000; }
+.todo-edit-save:hover { background: #d9ff40; }
+.todo-edit-cancel { background: transparent; border: 1px solid var(--border); color: var(--soft); }
+.todo-edit-cancel:hover { border-color: var(--soft); color: var(--text); }
+.todo-item.editing .todo-drag-handle,
+.todo-item.editing .todo-schedule-one-btn,
+.todo-item.editing .todo-delete { display: none; }
 .todo-section-label {
   font-family: 'Syne', sans-serif; font-size: 9px; letter-spacing: 0.1em;
   text-transform: uppercase; color: var(--muted); padding: 8px 14px 4px;
@@ -274,21 +311,23 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   padding: 16px 14px; line-height: 1.6; text-align: center;
 }
 .todo-input-row {
-  display: flex; gap: 0; border-top: 1px solid var(--border); padding: 8px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-top: 1px solid var(--border);
 }
 .todo-input {
-  flex: 1; background: var(--surface2); border: 1px solid var(--border);
-  border-right: none; border-radius: var(--r) 0 0 var(--r);
+  flex: 1; background: var(--surface3);
+  border: 1px solid var(--border); border-radius: var(--r);
   color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px;
   padding: 7px 10px; outline: none; transition: border-color 0.15s;
 }
 .todo-input:focus { border-color: var(--accent); }
 .todo-input::placeholder { color: var(--muted); }
 .todo-add-btn {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-left: none; border-radius: 0 var(--r) var(--r) 0;
-  color: var(--soft); font-size: 18px; line-height: 1; padding: 0 12px;
-  cursor: pointer; transition: all 0.15s;
+  flex-shrink: 0; width: 36px; height: 36px;
+  background: var(--surface3); border: 1px solid var(--border); border-radius: var(--r);
+  color: var(--soft); font-size: 22px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: color 0.15s, border-color 0.15s;
 }
 .todo-add-btn:hover { color: var(--accent); border-color: var(--accent); }
 
@@ -488,26 +527,66 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 
 /* Proposed block layout */
 .tg-event.proposed {
-  display: flex; flex-direction: column; justify-content: space-between;
-  overflow: visible; /* let buttons sit at bottom even if block is tiny */
+  overflow: visible;
+  display: flex; flex-direction: column; gap: 2px; padding: 3px 4px;
 }
-/* Action buttons on calendar block — sit below title */
+.prop-block-top {
+  display: flex; align-items: center; gap: 3px; min-width: 0;
+}
 .prop-block-actions {
-  display: flex; gap: 2px; margin-top: 2px; flex-shrink: 0;
+  display: flex; gap: 2px; flex-shrink: 0;
 }
 .prop-block-btn {
-  font-size: 11px; font-weight: 700; border: none; border-radius: 3px;
-  padding: 2px 6px; cursor: pointer; line-height: 1; transition: all 0.1s;
+  font-size: 10px; font-weight: 700; border: none; border-radius: 3px;
+  padding: 2px 5px; cursor: pointer; line-height: 1; transition: all 0.1s;
 }
-.prop-block-btn.accept { background: rgba(61,214,140,0.25); color: var(--confirm); }
-.prop-block-btn.accept:hover { background: var(--confirm); color: #000; }
-.prop-block-btn.reject { background: rgba(255,68,68,0.2); color: var(--red); }
-.prop-block-btn.reject:hover { background: var(--red); color: #fff; }
-.tg-event-title { font-family: 'Syne', sans-serif; font-weight: 600; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prop-block-btn.accept { background: rgba(61,214,140,0.9); color: #000; }
+.prop-block-btn.accept:hover { background: var(--confirm); }
+.prop-block-btn.reject { background: rgba(255,68,68,0.85); color: #fff; }
+.prop-block-btn.reject:hover { background: var(--red); }
+.tg-event-title { font-family: 'Syne', sans-serif; font-weight: 600; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+/* Resize tab hangs below the block — clear of all block content */
+.prop-resize-handle {
+  position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%);
+  width: 28px; height: 7px;
+  cursor: row-resize !important; z-index: 10;
+  pointer-events: all;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface2); border: 1px solid currentColor;
+  border-top: none; border-radius: 0 0 4px 4px;
+}
+.prop-resize-handle::after {
+  content: ''; display: block; width: 12px; height: 2px;
+  border-radius: 1px; background: currentColor; opacity: 0.7;
+}
+.tg-event.proposed .prop-resize-handle { opacity: 1; }
 /* Drag ghost */
 .drag-ghost {
   position: absolute; left: 2px; right: 2px; border-radius: 4px; pointer-events: none;
   z-index: 10; opacity: 0.55; border: 2px dashed var(--accent); background: rgba(200,241,53,0.2);
+}
+/* ── TODO → CALENDAR DRAG ── */
+.todo-drag-ghost {
+  position: fixed; z-index: 9999; pointer-events: none;
+  background: var(--surface3); border: 1px solid var(--accent);
+  border-radius: var(--r); padding: 5px 10px;
+  font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent);
+  white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  opacity: 0.92;
+}
+.todo-drag-ghost.over-calendar {
+  border-color: var(--confirm); color: var(--confirm);
+}
+.todo-dragging { opacity: 0.4; }
+.todo-drop-indicator {
+  position: absolute; left: 2px; right: 2px; height: 44px;
+  border-radius: 4px; pointer-events: none; z-index: 5;
+  background: rgba(61,214,140,0.15); border: 2px dashed var(--confirm);
+}
+.todo-drop-indicator::after {
+  content: '+ 1 hr'; position: absolute; top: 3px; left: 5px;
+  font-family: 'Syne', sans-serif; font-size: 9px; font-weight: 700;
+  letter-spacing: 0.06em; color: var(--confirm); opacity: 0.8;
 }
 .now-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--red); z-index: 2; }
 .now-line::before {
@@ -879,6 +958,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 }
 .memory-textarea:focus { border-color: var(--accent); color: var(--text); }
 .memory-char-count { font-size: 9px; color: var(--muted); letter-spacing: 0.04em; font-family: 'DM Mono', monospace; }
+.memory-save-row { display: flex; justify-content: flex-end; margin-top: 8px; }
+.memory-save-btn { padding: 7px 18px; font-size: 11px; }
 
 .cal-toggle-row { cursor: pointer; }
 .cal-toggle-pill {
