@@ -73,7 +73,7 @@ function renderTodos() {
         ${t.done ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
       </button>
       ${dragHandle}
-      <span class="todo-text" ondblclick="startEditTodo(${t.id}, this)" title="Double-click to edit">${escapeHtml(t.text)}${label}</span>
+      <span class="todo-text" ondblclick="startEditTodo(${t.id}, this)" onclick="_todoTextTap(${t.id}, this)" title="Double-click to edit">${escapeHtml(t.text)}${label}</span>
       ${rightBtns}
       <button class="todo-delete" onclick="deleteTodo(${t.id})" title="Delete">×</button>
     </li>`;
@@ -99,6 +99,30 @@ function _markMatchingTodoScheduled(title) {
 
 function escapeHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// On touch devices, single tap on todo text opens edit. On desktop, double-click handles it.
+let _todoTapTimer = null;
+let _todoLastTapId = null;
+function _todoTextTap(id, spanEl) {
+  const isTouch = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  if (!isTouch) return; // desktop: let ondblclick handle it
+  clearTimeout(_todoTapTimer);
+  if (_todoLastTapId === id) {
+    _todoLastTapId = null;
+    startEditTodo(id, spanEl);
+    return;
+  }
+  _todoLastTapId = id;
+  // Capture the live element reference before the timer fires
+  const capturedEl = spanEl;
+  _todoTapTimer = setTimeout(() => {
+    _todoLastTapId = null;
+    // Re-find the span in case it's still in DOM
+    const li = document.querySelector(`.todo-item[data-id="${id}"]`);
+    const span = li?.querySelector('.todo-text');
+    if (span && !li.classList.contains('editing')) startEditTodo(id, span);
+  }, 300);
 }
 
 function startEditTodo(id, spanEl) {
@@ -285,64 +309,50 @@ function attachTodoDragToCalendar() {
   if (!sidebar || sidebar._todoDragWired) return;
   sidebar._todoDragWired = true;
 
-  sidebar.addEventListener('mousedown', (e) => {
-    // Only fire when mousedown is on the drag handle
-    if (!e.target.closest('.todo-drag-handle')) return;
-    const item = e.target.closest('.todo-item');
-    if (!item) return;
-
-    const todoId  = parseFloat(item.dataset.id);
-    const todo    = todos.find(t => t.id === todoId);
-    if (!todo) return;
-
-    // Prevent text selection during drag
-    e.preventDefault();
-
+  // Shared drag logic used by both mouse and touch handlers
+  function startTodoDrag(item, todo, startClientX, startClientY, onAttach) {
     const originRect = item.getBoundingClientRect();
     let ghost        = null;
     let snapIndicator = null;
     let dragging     = false;
     let lastCol      = null;
 
-    const onMove = (me) => {
-      const dx = me.clientX - e.clientX;
-      const dy = me.clientY - e.clientY;
+    const activate = (clientX, clientY) => {
+      if (currentView !== 'day' && currentView !== 'week') return false;
+      dragging = true;
+      if (typeof _todoDragging !== 'undefined') _todoDragging = true;
+      ghost = document.createElement('div');
+      ghost.className = 'todo-drag-ghost';
+      ghost.textContent = todo.text.length > 30 ? todo.text.slice(0, 28) + '…' : todo.text;
+      document.body.appendChild(ghost);
+      ghost.style.left = `${clientX + 6}px`;
+      ghost.style.top  = `${clientY - 5}px`;
+      item.classList.add('todo-dragging');
+      return true;
+    };
 
-      if (!dragging && Math.hypot(dx, dy) < 6) return;
-
+    const move = (clientX, clientY) => {
       if (!dragging) {
-        // Only allow drag in day/week view
-        if (currentView !== 'day' && currentView !== 'week') return;
-        dragging = true;
-        if (typeof _todoDragging !== 'undefined') _todoDragging = true;
-
-        // Floating ghost label
-        ghost = document.createElement('div');
-        ghost.className = 'todo-drag-ghost';
-        ghost.textContent = todo.text.length > 30 ? todo.text.slice(0, 28) + '…' : todo.text;
-        document.body.appendChild(ghost);
-        item.classList.add('todo-dragging');
+        const dx = clientX - startClientX;
+        const dy = clientY - startClientY;
+        if (Math.hypot(dx, dy) < 6) return;
+        if (!activate(clientX, clientY)) return;
       }
 
-      // Default: ghost follows cursor. Overridden below when over a column.
-      ghost.style.left = `${me.clientX + 6}px`;
-      ghost.style.top  = `${me.clientY - 5}px`;
+      ghost.style.left = `${clientX + 6}px`;
+      ghost.style.top  = `${clientY - 5}px`;
 
-      // Hit-test: find tg-day-col under cursor
       ghost.style.pointerEvents = 'none';
-      const target = document.elementFromPoint(me.clientX, me.clientY);
+      const target = document.elementFromPoint(clientX, clientY);
       ghost.style.pointerEvents = '';
 
       const col = target?.closest('.tg-day-col');
-
       if (col) {
         ghost.classList.add('over-calendar');
         if (col !== lastCol) {
-          // Remove old indicator
           lastCol?.querySelector('.todo-drop-indicator')?.remove();
           lastCol = col;
         }
-        // Snap indicator inside column
         let ind = col.querySelector('.todo-drop-indicator');
         if (!ind) {
           ind = document.createElement('div');
@@ -352,16 +362,15 @@ function attachTodoDragToCalendar() {
         const colRect   = col.getBoundingClientRect();
         const body      = col.closest('.tg-body');
         const scrollTop = body ? body.scrollTop : 0;
-        const relY      = me.clientY - colRect.top + scrollTop;
-        const snapped = Math.round((relY / HOUR_PX) * 4) / 4; // 15-min snap
-        const clamped = Math.max(0, Math.min(snapped, WEEK_END_HOUR - WEEK_START_HOUR - 1));
+        const relY      = clientY - colRect.top + scrollTop;
+        const snapped   = Math.round((relY / HOUR_PX) * 4) / 4;
+        const clamped   = Math.max(0, Math.min(snapped, WEEK_END_HOUR - WEEK_START_HOUR - 1));
         const snapTopPx = clamped * HOUR_PX;
         ind.style.top   = `${snapTopPx}px`;
         ind._snapHours  = clamped;
         snapIndicator   = ind;
-        // Align ghost label to the snap indicator's viewport position
         const snapViewportY = colRect.top - scrollTop + snapTopPx;
-        ghost.style.left = `${me.clientX + 6}px`;
+        ghost.style.left = `${clientX + 6}px`;
         ghost.style.top  = `${snapViewportY - 5}px`;
       } else {
         ghost.classList.remove('over-calendar');
@@ -371,34 +380,29 @@ function attachTodoDragToCalendar() {
       }
     };
 
-    const onUp = (me) => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup',   onUp);
-
+    const drop = (clientX, clientY) => {
       item.classList.remove('todo-dragging');
       if (typeof _todoDragging !== 'undefined') _todoDragging = false;
 
       if (!dragging) return;
 
-      const col        = lastCol;
-      const snapHours  = snapIndicator?._snapHours ?? null;
-
-      // Clean up indicator
+      const col       = lastCol;
+      const snapHours = snapIndicator?._snapHours ?? null;
       lastCol?.querySelector('.todo-drop-indicator')?.remove();
 
       if (!col || snapHours == null) {
-        // Dropped outside — animate ghost back to origin then remove
-        ghost.style.transition = 'left 0.25s, top 0.25s, opacity 0.25s';
-        ghost.style.left       = `${originRect.left + originRect.width / 2}px`;
-        ghost.style.top        = `${originRect.top  + originRect.height / 2}px`;
-        ghost.style.opacity    = '0';
-        setTimeout(() => ghost.remove(), 280);
+        if (ghost) {
+          ghost.style.transition = 'left 0.25s, top 0.25s, opacity 0.25s';
+          ghost.style.left       = `${originRect.left + originRect.width / 2}px`;
+          ghost.style.top        = `${originRect.top  + originRect.height / 2}px`;
+          ghost.style.opacity    = '0';
+          setTimeout(() => ghost?.remove(), 280);
+        }
         return;
       }
 
       ghost.remove();
 
-      // Determine date from column index + current view date
       const gridBody = col.closest('.tg-body');
       const allCols  = gridBody ? Array.from(gridBody.querySelectorAll('.tg-day-col')) : [];
       const colIndex = allCols.indexOf(col);
@@ -414,18 +418,15 @@ function attachTodoDragToCalendar() {
       const startH    = WEEK_START_HOUR + snapHours;
       const startDate = new Date(dropDate);
       startDate.setHours(Math.floor(startH), Math.round((startH % 1) * 60), 0, 0);
-      const endDate   = new Date(startDate.getTime() + 60 * 60 * 1000); // 1hr default
+      const endDate   = new Date(startDate.getTime() + 60 * 60 * 1000);
 
       const pad = n => String(n).padStart(2, '0');
       const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 
       const ev = {
-        title: todo.text,
-        start: fmt(startDate),
-        end:   fmt(endDate),
+        title: todo.text, start: fmt(startDate), end: fmt(endDate),
         description: '', location: null, notes: null,
-        reminderMins: null, color: null, recurrence: null,
-        _state: 'pending',
+        reminderMins: null, color: null, recurrence: null, _state: 'pending',
       };
       proposedEvents.push(ev);
       saveProposedEvents();
@@ -434,9 +435,93 @@ function attachTodoDragToCalendar() {
       showToast(`"${todo.text}" added as proposal`, 'success');
     };
 
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup',   onUp);
+    onAttach(move, drop);
+  }
+
+  // ── MOUSE handler ──────────────────────────────────────────
+  sidebar.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.todo-drag-handle')) return;
+    const item = e.target.closest('.todo-item');
+    if (!item) return;
+    const todoId = parseFloat(item.dataset.id);
+    const todo   = todos.find(t => t.id === todoId);
+    if (!todo) return;
+    e.preventDefault();
+
+    startTodoDrag(item, todo, e.clientX, e.clientY, (move, drop) => {
+      const onMove = (me) => move(me.clientX, me.clientY);
+      const onUp   = (me) => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+        drop(me.clientX, me.clientY);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
   });
+
+  // ── TOUCH handler (hold-to-activate on mobile) ─────────────
+  sidebar.addEventListener('touchstart', (e) => {
+    if (!e.target.closest('.todo-drag-handle')) return;
+    const item = e.target.closest('.todo-item');
+    if (!item) return;
+    const todoId = parseFloat(item.dataset.id);
+    const todo   = todos.find(t => t.id === todoId);
+    if (!todo) return;
+
+    const touch  = e.touches[0];
+    const handle = e.target.closest('.todo-drag-handle');
+    let holdTimer = null;
+    let touchDragActive = false;
+
+    // Visual feedback: highlight handle while holding
+    handle.classList.add('hold-active');
+
+    holdTimer = setTimeout(() => {
+      touchDragActive = true;
+      // Haptic feedback if available
+      if (navigator.vibrate) navigator.vibrate(40);
+      handle.classList.remove('hold-active');
+
+      startTodoDrag(item, todo, touch.clientX, touch.clientY, (move, drop) => {
+        const onMove = (te) => {
+          te.preventDefault();
+          const t = te.touches[0];
+          move(t.clientX, t.clientY);
+        };
+        const onEnd = (te) => {
+          document.removeEventListener('touchmove', onMove);
+          document.removeEventListener('touchend',  onEnd);
+          document.removeEventListener('touchcancel', onEnd);
+          const t = te.changedTouches[0];
+          drop(t ? t.clientX : touch.clientX, t ? t.clientY : touch.clientY);
+        };
+        document.addEventListener('touchmove',   onMove,  { passive: false });
+        document.addEventListener('touchend',    onEnd);
+        document.addEventListener('touchcancel', onEnd);
+      });
+    }, 400); // 400ms hold to activate drag
+
+    const cancelHold = () => {
+      clearTimeout(holdTimer);
+      handle.classList.remove('hold-active');
+      item.removeEventListener('touchend',    cancelHold);
+      item.removeEventListener('touchcancel', cancelHold);
+      item.removeEventListener('touchmove',   cancelOnMove);
+    };
+    const cancelOnMove = (te) => {
+      // Cancel hold if finger moved more than 8px before timer fires
+      if (!touchDragActive) {
+        const t = te.touches[0];
+        const dx = t.clientX - touch.clientX;
+        const dy = t.clientY - touch.clientY;
+        if (Math.hypot(dx, dy) > 8) cancelHold();
+      }
+    };
+    item.addEventListener('touchend',    cancelHold);
+    item.addEventListener('touchcancel', cancelHold);
+    item.addEventListener('touchmove',   cancelOnMove, { passive: true });
+  }, { passive: true });
 }
 
 // ── ROUTING: CLAUDE DECIDES CALENDAR VS TODO ────────────────

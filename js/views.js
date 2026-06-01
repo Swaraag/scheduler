@@ -196,57 +196,60 @@ let _hoverTimer      = null;
 let _hoverLeaveTimer = null;
 let _todoDragging    = false; // set true while a todo→calendar drag is active
 
-function attachGridInteractions(gridBody) {
-  // Use mouseover/mouseout (they bubble) so entering from any side/child works
-  gridBody.addEventListener('mouseover', (e) => {
-    const block = e.target.closest('.tg-event');
-    if (!block) return;
-    if (block.contains(e.relatedTarget)) return;
-    if (block.classList.contains('proposed')) block.style.zIndex = '20';
-    clearTimeout(_hoverTimer);
-    clearTimeout(_hoverLeaveTimer);
-    // If this block's popup is already open (from hover-into-popup), de-solidify back to grayed
-    if (!_popupClickOpened && _popupEventData) {
-      const popup = document.getElementById('event-popup');
-      _popupHoverOnly = true;
-      popup.classList.remove('solidified');
-      document.getElementById('popup-overlay').classList.add('hidden');
-    }
-    _hoverTimer = setTimeout(() => {
-      if (block.dataset.dragging) return;
-      if (_todoDragging) return;
-      const r = block.getBoundingClientRect();
-      const encoded = block.getAttribute('onclick')?.match(/showEventPopup\(event,'([^']+)'\)/)?.[1];
-      if (!encoded) return;
-      const data = JSON.parse(decodeURIComponent(encoded));
-      _renderPopup(data, r.right, r.top, true);
-    }, 300);
-  });
+// True when the primary input is touch (suppresses hover popup logic)
+const _isTouchDevice = () => window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 
-  gridBody.addEventListener('mouseout', (e) => {
-    const block = e.target.closest('.tg-event');
-    if (!block) return;
-    if (block.contains(e.relatedTarget)) return;
-    if (block.classList.contains('proposed')) block.style.zIndex = '';
-    clearTimeout(_hoverTimer);
-    _hoverLeaveTimer = setTimeout(() => _closeHoverPopup(), 200);
-  });
+function attachGridInteractions(gridBody) {
+  if (!_isTouchDevice()) {
+    // Use mouseover/mouseout (they bubble) so entering from any side/child works
+    gridBody.addEventListener('mouseover', (e) => {
+      const block = e.target.closest('.tg-event');
+      if (!block) return;
+      if (block.contains(e.relatedTarget)) return;
+      if (block.classList.contains('proposed')) block.style.zIndex = '20';
+      clearTimeout(_hoverTimer);
+      clearTimeout(_hoverLeaveTimer);
+      if (!_popupClickOpened && _popupEventData) {
+        const popup = document.getElementById('event-popup');
+        _popupHoverOnly = true;
+        popup.classList.remove('solidified');
+        document.getElementById('popup-overlay').classList.add('hidden');
+      }
+      _hoverTimer = setTimeout(() => {
+        if (block.dataset.dragging) return;
+        if (_todoDragging) return;
+        const r = block.getBoundingClientRect();
+        const encoded = block.getAttribute('onclick')?.match(/showEventPopup\(event,'([^']+)'\)/)?.[1];
+        if (!encoded) return;
+        const data = JSON.parse(decodeURIComponent(encoded));
+        _renderPopup(data, r.right, r.top, true);
+      }, 300);
+    });
+
+    gridBody.addEventListener('mouseout', (e) => {
+      const block = e.target.closest('.tg-event');
+      if (!block) return;
+      if (block.contains(e.relatedTarget)) return;
+      if (block.classList.contains('proposed')) block.style.zIndex = '';
+      clearTimeout(_hoverTimer);
+      _hoverLeaveTimer = setTimeout(() => _closeHoverPopup(), 200);
+    });
+  }
 
   // Wire popup interactions once globally
   if (!window._popupHoverWired) {
     window._popupHoverWired = true;
     const popup = document.getElementById('event-popup');
-    // Entering popup: solidify visually but not permanently (not click-opened)
-    popup.addEventListener('mouseenter', () => {
-      clearTimeout(_hoverLeaveTimer);
-      _popupHoverOnly = false;
-      popup.classList.add('solidified');
-    });
-    // Leaving popup: close unless a real click opened it
-    popup.addEventListener('mouseleave', () => {
-      _hoverLeaveTimer = setTimeout(() => _closeHoverPopup(), 150);
-    });
-    // Clicking popup: make it truly persistent
+    if (!_isTouchDevice()) {
+      popup.addEventListener('mouseenter', () => {
+        clearTimeout(_hoverLeaveTimer);
+        _popupHoverOnly = false;
+        popup.classList.add('solidified');
+      });
+      popup.addEventListener('mouseleave', () => {
+        _hoverLeaveTimer = setTimeout(() => _closeHoverPopup(), 150);
+      });
+    }
     popup.addEventListener('mousedown', () => {
       clearTimeout(_hoverLeaveTimer);
       _popupClickOpened = true;
@@ -255,129 +258,186 @@ function attachGridInteractions(gridBody) {
     });
   }
 
-  // Resize: drag the bottom handle of a proposed block
+  const pad = n => String(n).padStart(2, '0');
+  const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+
+  // ── RESIZE (mouse) ──────────────────────────────────────────
   gridBody.addEventListener('mousedown', (e) => {
     if (!e.target.closest('.prop-resize-handle')) return;
-    e.stopPropagation();
-    e.preventDefault();
-
+    e.stopPropagation(); e.preventDefault();
     const block = e.target.closest('.tg-event.proposed');
     if (!block) return;
     const idx = parseInt(block.id.replace('prop-block-', ''));
     if (isNaN(idx)) return;
-
-    const ev      = proposedEvents[idx];
-    const col     = block.closest('.tg-day-col');
-    if (!col) return;
-
-    const origHeight = parseFloat(block.style.height);
-    const startY     = e.clientY;
-    const pad = n => String(n).padStart(2, '0');
-    const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-
-    clearTimeout(_hoverTimer);
-    block.dataset.dragging = '1';
-
-    const onMove = (me) => {
-      const dy = me.clientY - startY;
-      // Snap to 15-min increments, min 15 min (HOUR_PX/4)
-      const deltaMins   = Math.round((dy / HOUR_PX) * 60 / 15) * 15;
-      const newHeightPx = Math.max(HOUR_PX / 4, origHeight + (deltaMins / 60) * HOUR_PX);
-      block.style.height = `${newHeightPx}px`;
-    };
-
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      delete block.dataset.dragging;
-
-      const newHeightPx = parseFloat(block.style.height);
-      const newDurMins  = Math.round((newHeightPx / HOUR_PX) * 60 / 15) * 15;
-      const newEndDate  = new Date(ev.start);
-      newEndDate.setMinutes(newEndDate.getMinutes() + newDurMins);
-
-      proposedEvents[idx].end = fmt(newEndDate);
-      saveProposedEvents();
-      _refreshCalWithProposals();
-      renderProposals();
-    };
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    _startResize(block, idx, e.clientY, 'mouse');
   });
 
-  // Move drag: only on proposed blocks (not on buttons or resize handle)
+  // ── RESIZE (touch) ──────────────────────────────────────────
+  gridBody.addEventListener('touchstart', (e) => {
+    if (!e.target.closest('.prop-resize-handle')) return;
+    e.stopPropagation(); e.preventDefault();
+    const block = e.target.closest('.tg-event.proposed');
+    if (!block) return;
+    const idx = parseInt(block.id.replace('prop-block-', ''));
+    if (isNaN(idx)) return;
+    _startResize(block, idx, e.touches[0].clientY, 'touch');
+  }, { passive: false });
+
+  // ── MOVE DRAG (mouse) ───────────────────────────────────────
   gridBody.addEventListener('mousedown', (e) => {
     const block = e.target.closest('.tg-event.proposed');
     if (!block) return;
     if (e.target.closest('.prop-block-btn')) return;
     if (e.target.closest('.prop-resize-handle')) return;
-
     const idx = parseInt(block.id.replace('prop-block-', ''));
     if (isNaN(idx)) return;
-
-    const ev         = proposedEvents[idx];
-    const col        = block.closest('.tg-day-col');
-    if (!col) return;
-
-    const startMs    = new Date(ev.start).getTime();
-    const endMs      = new Date(ev.end).getTime();
-    const durationMs = endMs - startMs;
-
-    const startY     = e.clientY;
-    let   ghost      = null;
-    let   dragging   = false;
-
-    const onMove = (me) => {
-      const dy = me.clientY - startY;
-      if (!dragging && Math.abs(dy) < 6) return;
-
-      if (!dragging) {
-        dragging = true;
-        clearTimeout(_hoverTimer);
-        block.dataset.dragging = '1';
-        ghost = document.createElement('div');
-        ghost.className = 'drag-ghost';
-        ghost.style.height = block.style.height;
-        col.appendChild(ghost);
-        block.style.opacity = '0.3';
-      }
-
-      const deltaMins = Math.round((dy / HOUR_PX) * 60 / 15) * 15;
-      const newTopPx  = Math.max(0, parseFloat(block.style.top) + (deltaMins / 60) * HOUR_PX);
-      ghost.style.top = `${newTopPx}px`;
-    };
-
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-
-      if (!dragging) { delete block.dataset.dragging; return; }
-
-      const newTopPx     = parseFloat(ghost.style.top);
-      const newStartH    = newTopPx / HOUR_PX + WEEK_START_HOUR;
-      const newStartDate = new Date(ev.start);
-      newStartDate.setHours(Math.floor(newStartH), Math.round((newStartH % 1) * 60), 0, 0);
-      const newEndDate   = new Date(newStartDate.getTime() + durationMs);
-
-      const pad = n => String(n).padStart(2, '0');
-      const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-
-      proposedEvents[idx].start = fmt(newStartDate);
-      proposedEvents[idx].end   = fmt(newEndDate);
-
-      ghost.remove();
-      delete block.dataset.dragging;
-      block.style.opacity = '';
-
-      saveProposedEvents();
-      _refreshCalWithProposals();
-      renderProposals();
-    };
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    _startBlockMove(block, idx, e.clientY, 'mouse');
   });
+
+  // ── MOVE DRAG (touch) ───────────────────────────────────────
+  gridBody.addEventListener('touchstart', (e) => {
+    const block = e.target.closest('.tg-event.proposed');
+    if (!block) return;
+    if (e.target.closest('.prop-block-btn')) return;
+    if (e.target.closest('.prop-resize-handle')) return;
+    const idx = parseInt(block.id.replace('prop-block-', ''));
+    if (isNaN(idx)) return;
+    // On touch: require a short hold before drag activates to distinguish tap (popup) from drag
+    const touch = e.touches[0];
+    let holdTimer = null;
+    let moved = false;
+
+    holdTimer = setTimeout(() => {
+      if (moved) return;
+      if (navigator.vibrate) navigator.vibrate(30);
+      _startBlockMove(block, idx, touch.clientY, 'touch');
+    }, 350);
+
+    const onTouchMove = (te) => {
+      const t = te.touches[0];
+      if (Math.hypot(t.clientX - touch.clientX, t.clientY - touch.clientY) > 8) {
+        moved = true;
+        clearTimeout(holdTimer);
+        block.removeEventListener('touchmove', onTouchMove);
+        block.removeEventListener('touchend',  onTouchEnd);
+      }
+    };
+    const onTouchEnd = () => {
+      clearTimeout(holdTimer);
+      block.removeEventListener('touchmove', onTouchMove);
+      block.removeEventListener('touchend',  onTouchEnd);
+    };
+    block.addEventListener('touchmove', onTouchMove, { passive: true });
+    block.addEventListener('touchend',  onTouchEnd);
+  }, { passive: true });
+}
+
+function _startResize(block, idx, startClientY, inputType) {
+  const pad = n => String(n).padStart(2, '0');
+  const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+  const ev         = proposedEvents[idx];
+  const origHeight = parseFloat(block.style.height);
+  clearTimeout(_hoverTimer);
+  block.dataset.dragging = '1';
+
+  const onMove = (clientY) => {
+    const dy = clientY - startClientY;
+    const deltaMins   = Math.round((dy / HOUR_PX) * 60 / 15) * 15;
+    const newHeightPx = Math.max(HOUR_PX / 4, origHeight + (deltaMins / 60) * HOUR_PX);
+    block.style.height = `${newHeightPx}px`;
+  };
+
+  const onEnd = (clientY) => {
+    delete block.dataset.dragging;
+    const newHeightPx = parseFloat(block.style.height);
+    const newDurMins  = Math.round((newHeightPx / HOUR_PX) * 60 / 15) * 15;
+    const newEndDate  = new Date(ev.start);
+    newEndDate.setMinutes(newEndDate.getMinutes() + newDurMins);
+    proposedEvents[idx].end = fmt(newEndDate);
+    saveProposedEvents();
+    _refreshCalWithProposals();
+    renderProposals();
+  };
+
+  if (inputType === 'mouse') {
+    const onMouseMove = (me) => onMove(me.clientY);
+    const onMouseUp   = () => { document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp); onEnd(); };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  } else {
+    const onTouchMove = (te) => { te.preventDefault(); onMove(te.touches[0].clientY); };
+    const onTouchEnd  = (te) => {
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend',  onTouchEnd);
+      onEnd(te.changedTouches[0]?.clientY ?? startClientY);
+    };
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend',  onTouchEnd);
+  }
+}
+
+function _startBlockMove(block, idx, startClientY, inputType) {
+  const pad = n => String(n).padStart(2, '0');
+  const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+  const ev         = proposedEvents[idx];
+  const col        = block.closest('.tg-day-col');
+  if (!col) return;
+  const startMs    = new Date(ev.start).getTime();
+  const endMs      = new Date(ev.end).getTime();
+  const durationMs = endMs - startMs;
+  let   ghost      = null;
+  let   dragging   = false;
+
+  const onMove = (clientY) => {
+    const dy = clientY - startClientY;
+    if (!dragging && Math.abs(dy) < 6) return;
+    if (!dragging) {
+      dragging = true;
+      clearTimeout(_hoverTimer);
+      block.dataset.dragging = '1';
+      ghost = document.createElement('div');
+      ghost.className = 'drag-ghost';
+      ghost.style.height = block.style.height;
+      col.appendChild(ghost);
+      block.style.opacity = '0.3';
+    }
+    const deltaMins = Math.round((dy / HOUR_PX) * 60 / 15) * 15;
+    const newTopPx  = Math.max(0, parseFloat(block.style.top) + (deltaMins / 60) * HOUR_PX);
+    ghost.style.top = `${newTopPx}px`;
+  };
+
+  const onEnd = () => {
+    if (!dragging) { delete block.dataset.dragging; return; }
+    const newTopPx     = parseFloat(ghost.style.top);
+    const newStartH    = newTopPx / HOUR_PX + WEEK_START_HOUR;
+    const newStartDate = new Date(ev.start);
+    newStartDate.setHours(Math.floor(newStartH), Math.round((newStartH % 1) * 60), 0, 0);
+    const newEndDate   = new Date(newStartDate.getTime() + durationMs);
+    proposedEvents[idx].start = fmt(newStartDate);
+    proposedEvents[idx].end   = fmt(newEndDate);
+    ghost.remove();
+    delete block.dataset.dragging;
+    block.style.opacity = '';
+    saveProposedEvents();
+    _refreshCalWithProposals();
+    renderProposals();
+  };
+
+  if (inputType === 'mouse') {
+    const onMouseMove = (me) => onMove(me.clientY);
+    const onMouseUp   = () => { document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp); onEnd(); };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  } else {
+    const onTouchMove = (te) => { te.preventDefault(); onMove(te.touches[0].clientY); };
+    const onTouchEnd  = () => {
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend',  onTouchEnd);
+      onEnd();
+    };
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend',  onTouchEnd);
+  }
 }
 
 function renderMonthView(extra = []) {
