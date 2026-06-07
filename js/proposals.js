@@ -202,6 +202,36 @@ function renderProposals() {
 
   document.getElementById('proposals-list').innerHTML = proposedEvents.map((ev, i) => {
     const state = ev._state || 'pending';
+
+    // ── DELETION CARD ─────────────────────────────────────────
+    if (ev._action === 'delete') {
+      const fmtDT = iso => {
+        if (!iso) return '';
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' }) +
+          (iso.includes('T') ? '  ·  ' + d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' }) : '');
+      };
+      const scope = ev._deleteScope || 'single';
+      const recurringToggle = ev._recurringEventId ? `
+        <div class="delete-scope-row">
+          <button class="delete-scope-btn ${scope==='single'?'active':''}" onclick="setDeleteScope(${i},'single')">This event only</button>
+          <button class="delete-scope-btn ${scope==='series'?'active':''}" onclick="setDeleteScope(${i},'series')">Entire series</button>
+        </div>` : '';
+      return `<div class="event-card delete-card ${state}" id="card-${i}">
+        <div class="event-card-actions">
+          <button class="card-action-btn accept ${state==='accepted'?'active':''}" onclick="acceptProposal(${i})" title="Confirm deletion">✓</button>
+          <button class="card-action-btn reject ${state==='rejected'?'active':''}" onclick="rejectProposal(${i})" title="Keep event">✗</button>
+        </div>
+        <div class="event-info">
+          <div class="delete-card-badge">${ev._recurringEventId ? 'Recurring event' : 'Remove from calendar'}</div>
+          <div class="event-title-delete">${ev.title}</div>
+          <div class="event-desc" style="margin-top:6px">${fmtDT(ev.start)}${ev.end && ev.end !== ev.start ? ' → ' + fmtDT(ev.end) : ''}</div>
+          ${recurringToggle}
+        </div>
+      </div>`;
+    }
+
+    // ── ADD CARD (existing) ───────────────────────────────────
     if (!ev._calendarId) ev._calendarId = primaryId;
     const colorOpts = COLOR_OPTIONS.map(([v,l]) => `<option value="${v}" ${ev.color===v?'selected':''}>${l}</option>`).join('');
     const hasExtras = ev.location || ev.notes || ev.reminderMins || ev.color || ev.recurrence;
@@ -273,6 +303,17 @@ function renderProposals() {
 
   document.getElementById('proposals-section').classList.add('visible');
   document.getElementById('revise-area').classList.add('hidden');
+
+  // Update confirm button label to reflect mix of adds and deletes
+  const confirmBtn = document.querySelector('.btn-confirm');
+  if (confirmBtn) {
+    const adds    = proposedEvents.filter(e => e._state !== 'rejected' && e._action !== 'delete').length;
+    const deletes = proposedEvents.filter(e => e._state !== 'rejected' && e._action === 'delete').length;
+    if (adds && deletes)     confirmBtn.textContent = `Confirm All (${adds} add, ${deletes} delete) →`;
+    else if (deletes)        confirmBtn.textContent = `Confirm ${deletes} Deletion${deletes>1?'s':''} →`;
+    else                     confirmBtn.textContent = 'Confirm All →';
+  }
+
   _refreshCalWithProposals();
 }
 
@@ -311,21 +352,58 @@ function updateProposal(i, field, value) {
   _refreshCalWithProposals();
 }
 
+function setDeleteScope(i, scope) {
+  proposedEvents[i]._deleteScope = scope;
+  saveProposedEvents();
+  renderProposals();
+}
+
 function _refreshCalWithProposals() {
-  const visible = proposedEvents.filter(e => e._state !== 'rejected');
-  if (currentView === 'week')  renderWeekView(visible);
-  if (currentView === 'month') renderMonthView(visible);
+  const visible    = proposedEvents.filter(e => e._state !== 'rejected');
+  const deleteIds  = proposedEvents
+    .filter(e => e._action === 'delete' && e._state !== 'rejected')
+    .map(e => e._existingId);
+  if (currentView === 'day')      renderDayView(visible, deleteIds);
+  if (currentView === 'threeday') renderThreeDayView(visible, deleteIds);
+  if (currentView === 'week')     renderWeekView(visible, deleteIds);
+  if (currentView === 'month')    renderMonthView(visible, deleteIds);
 }
 
 // ── CALENDAR WRITE ─────────────────────────────────────────
 async function confirmEvents() {
-  const toAdd = proposedEvents.filter(e => e._state !== 'rejected');
-  if (toAdd.length === 0) { showToast('Nothing to add — reject fewer events', 'error'); return; }
-  setLoading(true, `adding ${toAdd.length} event${toAdd.length>1?'s':''}...`);
+  const accepted = proposedEvents.filter(e => e._state !== 'rejected');
+  if (accepted.length === 0) { showToast('Nothing to confirm — reject fewer events', 'error'); return; }
+
+  const toAdd    = accepted.filter(e => e._action !== 'delete');
+  const toDelete = accepted.filter(e => e._action === 'delete');
+
+  const totalOps = toAdd.length + toDelete.length;
+  setLoading(true, `applying ${totalOps} change${totalOps>1?'s':''}...`);
   document.getElementById('proposals-section').classList.remove('visible');
+
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const COLOR_MAP = { tomato:'11',flamingo:'4',tangerine:'6',banana:'5',sage:'2',basil:'10',peacock:'7',blueberry:'9',lavender:'1',grape:'3',graphite:'8' };
-  let added = 0;
+
+  let added = 0, deleted = 0;
+
+  // Handle deletions first
+  for (const ev of toDelete) {
+    try {
+      const calId  = ev._calId || 'primary';
+      // For series scope, delete the master recurring event; otherwise delete just this instance
+      const idToDelete = (ev._deleteScope === 'series' && ev._recurringEventId)
+        ? ev._recurringEventId
+        : ev._existingId;
+      const res = await apiFetch(
+        `${CAL_API}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(idToDelete)}`,
+        { method: 'DELETE' }
+      );
+      if (!res.ok && res.status !== 204) throw new Error(await res.text());
+      deleted++;
+    } catch (e) { console.error('Failed to delete:', ev.title, e); }
+  }
+
+  // Handle additions
   for (const ev of toAdd) {
     try {
       const body = {
@@ -347,16 +425,21 @@ async function confirmEvents() {
       );
       if (!res.ok) throw new Error(await res.text());
       added++;
-      // If this event came from a todo, mark that todo as scheduled
       _markMatchingTodoScheduled(ev.title);
     } catch (e) { console.error('Failed to add:', ev.title, e); }
   }
+
   setLoading(false);
   await fetchEvents7();
   resetUI();
   localStorage.removeItem('scheduler_proposals');
-  showToast(`${added} event${added>1?'s':''} added to Google Calendar ✓`, 'success');
-  updateMemoryAfterConfirm(toAdd);
+
+  const parts = [];
+  if (added)   parts.push(`${added} event${added>1?'s':''} added`);
+  if (deleted) parts.push(`${deleted} event${deleted>1?'s':''} deleted`);
+  showToast(parts.join(', ') + ' ✓', 'success');
+
+  if (toAdd.length) updateMemoryAfterConfirm(toAdd);
 }
 
 async function updateMemoryAfterConfirm(addedEvents) {

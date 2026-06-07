@@ -88,6 +88,7 @@ function renderTodos() {
   }
   list.innerHTML = html;
   attachTodoDragToCalendar();
+  if (typeof _updateTodoBadge !== 'undefined') _updateTodoBadge();
 }
 
 function _markMatchingTodoScheduled(title) {
@@ -534,30 +535,33 @@ async function routeAndProcess(text, imageData) {
   const calContext = calEvents7.map(e => {
     const s  = e.start.dateTime || e.start.date;
     const en = e.end?.dateTime  || e.end?.date || s;
-    return `- "${e.summary || 'Untitled'}" from ${s} to ${en}`;
+    return `- id:${e.id} "${e.summary || 'Untitled'}" from ${s} to ${en}`;
   }).join('\n') || '(no existing events)';
   const memory = localStorage.getItem('scheduler_memory') || '';
 
   const routingSystem = `You are a smart assistant that manages both a calendar and a todo list.
 Today is ${now.toISOString()} (${now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}).
 ${memory ? `User preferences:\n${memory}\n` : ''}
-User's existing calendar for the next 7 days:
+User's existing calendar for the next 7 days (each event has an id):
 ${calContext}
 
 User's current pending todos:
 ${todoList}
 
 Your job: analyze the user's input and split it into:
-1. "calendar" items — concrete events with a specific or implied time/date ("dentist Friday", "gym tomorrow morning", "meeting at 3pm")
-2. "todo" items — fuzzy tasks with no committed time ("buy groceries", "email professor", "finish chapter 4", "pack bag")
+1. "calendar" items — concrete events to ADD with a specific or implied time/date ("dentist Friday", "gym tomorrow morning", "meeting at 3pm")
+2. "todos" items — fuzzy tasks with no committed time ("buy groceries", "email professor", "finish chapter 4", "pack bag")
+3. "delete" items — requests to REMOVE existing calendar events. Match against the existing calendar list above by title similarity. Return the event id of each matched event.
 
-Some inputs may produce BOTH (e.g. "schedule gym tomorrow and remind me to pack my bag").
+Some inputs may produce multiple types (e.g. "cancel dentist and add gym tomorrow and remind me to pack").
 If the user asks to schedule their todos, treat all pending todos as calendar items.
+For deletions: only include events you are confident the user wants deleted. If ambiguous, do not include.
 
-Respond ONLY with a valid JSON object with exactly these two fields:
+Respond ONLY with a valid JSON object with exactly these three fields:
 {
-  "calendar": ["item 1", "item 2"],  // items to schedule on the calendar (empty array if none)
-  "todos":    ["item 1", "item 2"]   // items to add to the todo list (empty array if none)
+  "calendar": ["item 1", "item 2"],    // items to schedule (empty array if none)
+  "todos":    ["item 1", "item 2"],    // items to add to todo list (empty array if none)
+  "delete":   ["eventId1", "eventId2"] // ids of existing events to delete (empty array if none)
 }
 No prose, no markdown, no code fences.`;
 
@@ -603,13 +607,40 @@ No prose, no markdown, no code fences.`;
       routed = { calendar: [text], todos: [] };
     }
 
-    const calItems  = routed.calendar || [];
-    const todoItems = routed.todos    || [];
+    const calItems    = routed.calendar || [];
+    const todoItems   = routed.todos    || [];
+    const deleteIds   = routed.delete   || [];
 
     // Add todos immediately
     if (todoItems.length) {
       todoItems.forEach(t => addTodo(t));
       showToast(`Added ${todoItems.length} todo${todoItems.length > 1 ? 's' : ''}`, 'success');
+    }
+
+    // Build deletion proposals from matched event IDs
+    if (deleteIds.length) {
+      const matched = deleteIds
+        .map(id => calEvents7.find(e => e.id === id))
+        .filter(Boolean);
+      if (matched.length) {
+        matched.forEach(e => {
+          proposedEvents.push({
+            _action:           'delete',
+            _existingId:       e.id,
+            _recurringEventId: e.recurringEventId || null,
+            _deleteScope:      'single', // 'single' | 'series'
+            _calId:            e._calId || 'primary',
+            title:             e.summary || 'Untitled',
+            start:             e.start.dateTime || e.start.date,
+            end:               e.end?.dateTime  || e.end?.date || e.start.dateTime || e.start.date,
+            description: null, location: null, notes: null,
+            reminderMins: null, color: null, recurrence: null,
+            _state: 'pending',
+          });
+        });
+        saveProposedEvents();
+        renderProposals();
+      }
     }
 
     // Schedule calendar items
@@ -618,7 +649,7 @@ No prose, no markdown, no code fences.`;
       await callClaude([{ role: 'user', content: `I need to schedule the following: ${calText}` }]);
     } else {
       setLoading(false);
-      if (!todoItems.length) showError('Nothing to add. Try being more specific.');
+      if (!todoItems.length && !deleteIds.length) showError('Nothing to add. Try being more specific.');
     }
 
   } catch (e) {

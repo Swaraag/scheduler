@@ -13,7 +13,7 @@ window.onload = () => {
   const savedTheme = localStorage.getItem('scheduler_theme');
   if (savedTheme) { try { applyTheme(JSON.parse(savedTheme), false); } catch {} }
 
-  if (window.innerWidth <= 600) currentView = 'day';
+  if (window.innerWidth <= 600) currentView = 'threeday';
 
   document.addEventListener('keydown', (e) => {
     if (!(e.metaKey || e.ctrlKey) || e.key !== 'Enter') return;
@@ -154,6 +154,32 @@ function closeSettings(force) {
 function closeAnyModal() {
   if (!document.getElementById('settings-modal').classList.contains('hidden')) { closeSettings(); return; }
   if (!document.getElementById('schedule-all-modal').classList.contains('hidden')) { closeScheduleAllPopup(); return; }
+}
+
+// ── MOBILE TODO DRAWER ─────────────────────────────────────
+function openTodoDrawer() {
+  document.getElementById('todo-sidebar').classList.add('drawer-open');
+  document.getElementById('todo-drawer-backdrop').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeTodoDrawer() {
+  document.getElementById('todo-sidebar').classList.remove('drawer-open');
+  document.getElementById('todo-drawer-backdrop').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function _updateTodoBadge() {
+  const isMobile = window.innerWidth <= 600;
+  const badge = document.getElementById('todo-open-badge');
+  if (!badge) return;
+  const count = (typeof todos !== 'undefined') ? todos.filter(t => !t.done && !t.scheduled).length : 0;
+  if (isMobile && count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
 }
 
 function showResetConfirm() {

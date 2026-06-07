@@ -18,6 +18,11 @@ function navigateWeek(delta) {
   renderWeekView(proposedEvents.filter(e => e._state !== 'rejected'));
 }
 
+function navigateThreeDay(delta) {
+  currentThreeDayOffset += delta;
+  renderThreeDayView(proposedEvents.filter(e => e._state !== 'rejected'));
+}
+
 function navigateMonth(delta) {
   currentMonthOffset += delta;
   renderMonthView(proposedEvents.filter(e => e._state !== 'rejected'));
@@ -29,34 +34,48 @@ function navigateYear(delta) {
 }
 
 function switchCalView(view, date) {
-  if (view !== 'week')  currentWeekOffset  = 0;
-  if (view !== 'month') currentMonthOffset = 0;
-  if (view !== 'year')  currentYearOffset  = 0;
+  if (view !== 'week')     currentWeekOffset     = 0;
+  if (view !== 'threeday') currentThreeDayOffset = 0;
+  if (view !== 'month')    currentMonthOffset    = 0;
+  if (view !== 'year')     currentYearOffset     = 0;
   currentView = view;
   if (date) {
     const [y, m, d] = date.split('-').map(Number);
     currentDayDate = new Date(y, m - 1, d);
+    // For 3-day view, snap the offset so the selected date is in the window
+    if (view === 'threeday') {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const target = new Date(y, m - 1, d);
+      const diffDays = Math.round((target - today) / 86400000);
+      currentThreeDayOffset = Math.floor(diffDays / 3);
+    }
   }
-  ['day','week','month','year'].forEach(v => {
-    document.getElementById(`pill-${v}`).classList.toggle('active', v === view);
-    document.getElementById(`cal-${v}-view`).classList.toggle('hidden', v !== view);
+  ['day','week','threeday','month','year'].forEach(v => {
+    const pill = document.getElementById(`pill-${v}`);
+    const view_el = document.getElementById(`cal-${v}-view`);
+    if (pill) pill.classList.toggle('active', v === view);
+    if (view_el) view_el.classList.toggle('hidden', v !== view);
   });
   renderCurrentView();
 }
 
 function renderCurrentView() {
-  const visible = (typeof proposedEvents !== 'undefined')
+  const visible   = (typeof proposedEvents !== 'undefined')
     ? proposedEvents.filter(e => e._state !== 'rejected')
     : [];
+  const deleteIds = (typeof proposedEvents !== 'undefined')
+    ? proposedEvents.filter(e => e._action === 'delete' && e._state !== 'rejected').map(e => e._existingId)
+    : [];
   switch (currentView) {
-    case 'day':   renderDayView(visible);   break;
-    case 'week':  renderWeekView(visible);  break;
-    case 'month': renderMonthView(visible); break;
-    case 'year':  renderYearView();         break;
+    case 'day':      renderDayView(visible, deleteIds);      break;
+    case 'week':     renderWeekView(visible, deleteIds);     break;
+    case 'threeday': renderThreeDayView(visible, deleteIds); break;
+    case 'month':    renderMonthView(visible, deleteIds);    break;
+    case 'year':     renderYearView();                       break;
   }
 }
 
-function renderDayView(extra = []) {
+function renderDayView(extra = [], deleteIds = []) {
   const el      = document.getElementById('cal-day-view');
   const target  = new Date(currentDayDate); target.setHours(0,0,0,0);
   const today   = new Date(); today.setHours(0,0,0,0);
@@ -68,18 +87,16 @@ function renderDayView(extra = []) {
   const DAY_NAMES  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const label = `${DAY_NAMES[target.getDay()]}, ${MONTH_ABBR[target.getMonth()]} ${target.getDate()}`;
-  el.innerHTML = buildTimeGrid([{ date: target, label, events, proposed, isToday }], 'day');
+  el.innerHTML = buildTimeGrid([{ date: target, label, events, proposed, isToday }], 'day', deleteIds);
   scrollToNow(el);
 }
 
-function renderWeekView(extra = []) {
-  if (window.innerWidth <= 600) { switchCalView('day'); return; }
+function renderWeekView(extra = [], deleteIds = []) {
+  if (window.innerWidth <= 600) { switchCalView('threeday'); return; }
   const el    = document.getElementById('cal-week-view');
   const today = new Date(); today.setHours(0,0,0,0);
   const DAY_ABBR = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  // Anchor to today + offset
   const anchor = new Date(today); anchor.setDate(today.getDate() + currentWeekOffset * 7);
-  // Use year events pool when available (covers past/future weeks outside the 7-day window)
   const pool = calEventsYear || calEvents7;
   const cols = Array.from({ length: 7 }, (_, i) => {
     const d      = new Date(anchor); d.setDate(anchor.getDate() + i);
@@ -91,17 +108,37 @@ function renderWeekView(extra = []) {
       proposed: extra.filter(e => (e.start || '').slice(0,10) === dayStr),
     };
   });
-  el.innerHTML = buildTimeGrid(cols, 'week');
+  el.innerHTML = buildTimeGrid(cols, 'week', deleteIds);
   scrollToNow(el);
 }
 
-function buildTimeGrid(cols, mode) {
+function renderThreeDayView(extra = [], deleteIds = []) {
+  const el    = document.getElementById('cal-threeday-view');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const DAY_ABBR = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const anchor = new Date(today); anchor.setDate(today.getDate() + currentThreeDayOffset * 3);
+  const pool = calEventsYear || calEvents7;
+  const cols = Array.from({ length: 3 }, (_, i) => {
+    const d      = new Date(anchor); d.setDate(anchor.getDate() + i);
+    const dayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return {
+      date: d, label: DAY_ABBR[d.getDay()],
+      isToday: d.toDateString() === today.toDateString(),
+      events:   pool.filter(e => (e.start.dateTime || e.start.date || '').slice(0,10) === dayStr),
+      proposed: extra.filter(e => (e.start || '').slice(0,10) === dayStr),
+    };
+  });
+  el.innerHTML = buildTimeGrid(cols, 'threeday', deleteIds);
+  scrollToNow(el);
+}
+
+function buildTimeGrid(cols, mode, deleteIds = []) {
   const totalHours = WEEK_END_HOUR - WEEK_START_HOUR;
   const gridCols   = `44px repeat(${cols.length}, 1fr)`;
 
-  // Nav arrows: day view navigates by 1 day, week view by 1 week
-  const prevFn = mode === 'day' ? `navigateDay(-1)` : `navigateWeek(-1)`;
-  const nextFn = mode === 'day' ? `navigateDay(1)`  : `navigateWeek(1)`;
+  // Nav arrows
+  const prevFn = mode === 'day' ? `navigateDay(-1)` : mode === 'threeday' ? `navigateThreeDay(-1)` : `navigateWeek(-1)`;
+  const nextFn = mode === 'day' ? `navigateDay(1)`  : mode === 'threeday' ? `navigateThreeDay(1)`  : `navigateWeek(1)`;
   const navCorner = `
     <div class="tg-corner tg-nav-corner">
       <button class="tg-nav-btn" onclick="${prevFn}" title="Previous">‹</button>
@@ -111,7 +148,7 @@ function buildTimeGrid(cols, mode) {
   const headerCells = cols.map(c => {
     const ds = `${c.date.getFullYear()}-${String(c.date.getMonth()+1).padStart(2,'0')}-${String(c.date.getDate()).padStart(2,'0')}`;
     const clickable = mode !== 'day' ? `clickable" onclick="switchCalView('day','${ds}')" title="View ${c.label}` : ``;
-    return `<div class="tg-day-label ${c.isToday ? 'today' : ''} ${clickable}">
+    return `<div class="tg-day-label ${c.isToday ? 'today' : ''} ${clickable || ''}">
       ${c.label}<span class="day-num">${c.date.getDate()}</span>
     </div>`;
   }).join('');
@@ -122,7 +159,7 @@ function buildTimeGrid(cols, mode) {
   }).join('');
 
   const dayCols = cols.map(c => {
-    const blocks   = (c.events || []).map(e => eventBlock(e)).join('');
+    const blocks   = (c.events || []).map(e => eventBlock(e, deleteIds)).join('');
     const proposed = (c.proposed || []).map((e, pi) => proposedBlock(e, e._idx !== undefined ? e._idx : pi)).join('');
     const now = new Date();
     const nowLine = c.isToday
@@ -141,7 +178,7 @@ function buildTimeGrid(cols, mode) {
   </div>`;
 }
 
-function eventBlock(ev) {
+function eventBlock(ev, deleteIds = []) {
   const start  = new Date(ev.start?.dateTime || ev.start?.date || ev.start);
   const end    = new Date(ev.end?.dateTime   || ev.end?.date   || ev.end || ev.start?.dateTime || ev.start);
   const top    = Math.max(0, start.getHours() + start.getMinutes()/60 - WEEK_START_HOUR) * HOUR_PX;
@@ -152,8 +189,14 @@ function eventBlock(ev) {
     title, start: start.toISOString(), end: end.toISOString(),
     desc: ev.description || '', loc: ev.location || '',
   }));
-  return `<div class="tg-event" style="top:${top}px;height:${height}px" onclick="showEventPopup(event,'${data}')">
+  const isDeleting = ev.id && deleteIds.includes(ev.id);
+  const deleteClass = isDeleting ? ' proposed-delete' : '';
+  const deleteOverlay = isDeleting
+    ? `<div class="tg-event-delete-overlay"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="0" x2="100" y2="100" vector-effect="non-scaling-stroke"/><line x1="100" y1="0" x2="0" y2="100" vector-effect="non-scaling-stroke"/></svg></div>`
+    : '';
+  return `<div class="tg-event${deleteClass}" style="top:${top}px;height:${height}px" onclick="showEventPopup(event,'${data}')">
     <div class="tg-event-title">${title}</div>
+    ${deleteOverlay}
   </div>`;
 }
 
@@ -440,7 +483,7 @@ function _startBlockMove(block, idx, startClientY, inputType) {
   }
 }
 
-function renderMonthView(extra = []) {
+function renderMonthView(extra = [], deleteIds = []) {
   const el    = document.getElementById('cal-month-view');
   const today = new Date();
   // Apply offset: shift month, let Date handle year rollovers
@@ -476,7 +519,8 @@ function renderMonthView(extra = []) {
       const payload = JSON.stringify({ id: e.id||'', calId: e._calId||'primary', title: e.summary||'Event',
         start: e.start.dateTime||e.start.date, end: e.end?.dateTime||e.end?.date||'',
         desc: e.description||'', loc: e.location||'' });
-      return `<span class="month-pill" onclick="event.stopPropagation();showEventPopupFromEl(event,${JSON.stringify(payload)})">${e.summary||'Event'}</span>`;
+      const isDeleting = e.id && deleteIds.includes(e.id);
+      return `<span class="month-pill${isDeleting?' month-pill-delete':''}" onclick="event.stopPropagation();showEventPopupFromEl(event,${JSON.stringify(payload)})">${e.summary||'Event'}</span>`;
     }).join('');
     const propPills = c.proposed.map(e => `<span class="month-pill proposed">${e.title}</span>`).join('');
     const overflow  = c.events.length > 3 ? `<div class="month-overflow">+${c.events.length-3} more</div>` : '';

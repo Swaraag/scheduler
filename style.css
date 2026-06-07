@@ -217,6 +217,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .todo-title {
   font-family: 'Syne', sans-serif; font-weight: 700; font-size: 11px;
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
 }
 .todo-schedule-btn {
   display: flex; align-items: center; gap: 5px;
@@ -354,7 +355,31 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .icon-btn:hover { border-color: var(--soft); color: var(--text); }
 
 /* ── CAL PILL SWITCHER ── */
+/* 3-day view is mobile-only; week is desktop-only */
+#pill-threeday { display: none; }
+
 .cal-pill-row { display: flex; align-items: center; justify-content: space-between; }
+.cal-pill-right { display: flex; align-items: center; gap: 6px; }
+
+/* Todos button — mobile only, hidden on desktop */
+.todo-open-btn { display: none; }
+
+/* ── TODO HEADER RIGHT (schedule + close) ── */
+.todo-header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.todo-close-btn {
+  display: none; /* shown only on mobile via media query */
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  padding: 4px; border-radius: 4px; transition: color 0.15s;
+  align-items: center; justify-content: center;
+}
+.todo-close-btn:hover { color: var(--text); }
+
+/* ── MOBILE TODO DRAWER BACKDROP ── */
+.todo-drawer-backdrop {
+  display: none; /* shown on mobile when drawer opens */
+  position: fixed; inset: 0; z-index: 149;
+  background: rgba(0,0,0,0.55);
+}
 .cal-pills {
   display: flex; gap: 2px;
   background: var(--surface); border: 1px solid var(--border);
@@ -1014,13 +1039,14 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 
 @media (max-width: 600px) {
   .container { padding: 0 10px; }
+  /* Single column — sidebar is a fixed drawer, not in flow */
   .main-columns { grid-template-columns: 1fr; }
-  .todo-sidebar { position: static; }
   .landing-features { grid-template-columns: 1fr; }
   .landing-hero { padding: 50px 0 36px; }
 
-  /* Hide week pill — week view is unusable at this width */
-  #pill-week { display: none; }
+  /* On mobile: hide week (7-col too narrow), show 3-day instead */
+  #pill-week    { display: none; }
+  #pill-threeday { display: inline-flex; }
 
   /* Tighter header */
   #app-screen { gap: 10px; padding-top: 14px; }
@@ -1028,9 +1054,10 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   .wordmark { font-size: 11px; }
   #cal-status { display: none; }
 
-  /* Pill switcher — tighter, larger tap targets */
-  .cal-pill { padding: 8px 11px; font-size: 10px; }
-  .today-btn { padding: 8px 10px; font-size: 10px; }
+  /* Pill row — pills on left, Today+Todos on right, no overflow */
+  .cal-pill-row { gap: 6px; }
+  .cal-pill { padding: 7px 9px; font-size: 10px; }
+  .today-btn { padding: 7px 10px; font-size: 10px; }
   .cal-pills { gap: 1px; }
 
   /* Calendar container — taller on mobile so more of the day is visible */
@@ -1084,48 +1111,145 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
   /* Toast — wider */
   .toast { white-space: normal; text-align: center; max-width: 90vw; }
 
-  /* ── TODO SIDEBAR MOBILE ── */
+  /* ── TODO OPEN BUTTON (mobile) ── */
+  .todo-open-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    background: transparent; border: 1px solid var(--border2);
+    border-radius: var(--r); padding: 7px 10px;
+    color: var(--soft); cursor: pointer; transition: all 0.15s;
+    position: relative;
+  }
+  .todo-open-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .todo-open-badge {
+    display: none; /* shown via JS when todos exist */
+    position: absolute; top: -5px; right: -5px;
+    min-width: 16px; height: 16px; border-radius: 8px; padding: 0 4px;
+    background: var(--accent); color: #000;
+    font-size: 9px; font-weight: 700; font-family: 'Syne', sans-serif;
+    align-items: center; justify-content: center;
+  }
+
+  /* ── TODO SIDEBAR → BOTTOM DRAWER (mobile) ── */
+  .todo-sidebar {
+    /* Detach from normal flow, become a fixed bottom sheet */
+    position: fixed !important;
+    left: 0; right: 0; bottom: 0;
+    /* Start off-screen below the viewport */
+    top: auto !important;
+    z-index: 150;
+    border-radius: var(--rl) var(--rl) 0 0;
+    max-height: 75vh;
+    transform: translateY(110%);
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+    display: flex; flex-direction: column;
+    border-left: none; border-right: none; border-bottom: none;
+  }
+  .todo-sidebar.drawer-open {
+    transform: translateY(0);
+  }
+  .todo-drawer-backdrop:not(.hidden) {
+    display: block;
+  }
+
+  /* Drag handle pill at top of drawer */
+  .todo-sidebar::before {
+    content: '';
+    display: block; width: 36px; height: 4px;
+    background: var(--border2); border-radius: 2px;
+    margin: 10px auto 6px; flex-shrink: 0;
+  }
+
+  /* Close button visible on mobile */
+  .todo-close-btn { display: flex; }
+
+  /* Todo list fills available space */
+  .todo-list { max-height: none; flex: 1; }
+
   /* Always show action buttons on touch — no hover available */
   .todo-delete,
   .todo-drag-handle,
-  .todo-schedule-one-btn {
-    opacity: 1 !important;
-  }
-  /* Make todo items taller for better touch targets */
+  .todo-schedule-one-btn { opacity: 1 !important; }
+
+  /* Bigger touch targets */
   .todo-item { padding: 11px 10px; gap: 10px; }
   .todo-check { width: 20px; height: 20px; }
-  /* Restrict todo list height so input row stays accessible */
-  .todo-list { max-height: 280px; }
-  /* Bigger touch target for add button */
   .todo-add-btn { width: 42px; height: 42px; font-size: 24px; }
   .todo-input { font-size: 13px; padding: 9px 10px; }
-
-  /* Drag handle — bigger tap target, always styled visibly */
-  .todo-drag-handle {
-    color: var(--soft);
-    padding: 2px 5px;
-  }
+  .todo-drag-handle { color: var(--soft); padding: 2px 5px; }
   .todo-drag-handle svg { width: 17px; height: 17px; }
-
-  /* Schedule-one and delete buttons — bigger touch targets */
   .todo-schedule-one-btn { padding: 2px 5px; color: var(--muted); }
   .todo-schedule-one-btn svg { width: 17px; height: 17px; }
   .todo-delete { font-size: 20px; padding: 0 5px; color: var(--muted); }
+  .todo-drag-handle.hold-active { color: var(--accent); }
 
-  /* Drag handle long-press hint: show a "hold" label briefly */
-  .todo-drag-handle.hold-active {
-    color: var(--accent);
-  }
-
-  /* Proposed block action buttons — bigger touch targets */
+  /* Proposed block action buttons */
   .prop-block-btn { padding: 4px 8px; font-size: 12px; }
-
-  /* Resize handle — wider on mobile */
   .prop-resize-handle { width: 40px; height: 10px; bottom: -10px; }
 
   /* Schedule-all modal — full width */
   .schedule-all-box { max-width: 100%; }
 }
+
+/* ── PROPOSED DELETION — calendar block ── */
+.tg-event.proposed-delete {
+  opacity: 0.55;
+  border-left-color: var(--red);
+  background: rgba(255, 68, 68, 0.1);
+  color: var(--red);
+}
+.tg-event-delete-overlay {
+  position: absolute; inset: 0; pointer-events: none;
+  overflow: hidden; border-radius: 4px;
+}
+.tg-event-delete-overlay svg {
+  width: 100%; height: 100%;
+}
+.tg-event-delete-overlay svg line {
+  stroke: var(--red); stroke-width: 1.5px; opacity: 0.6;
+}
+/* Month view pill for deletion */
+.month-pill.month-pill-delete {
+  background: rgba(255,68,68,0.12); color: var(--red);
+  text-decoration: line-through; opacity: 0.7;
+}
+
+/* ── DELETION PROPOSAL CARD ── */
+.event-card.delete-card {
+  border-color: var(--red);
+  background: rgba(255,68,68,0.04);
+}
+.event-card.delete-card.rejected {
+  border-color: var(--border); opacity: 0.35;
+}
+.event-card.delete-card.accepted {
+  border-color: var(--red); background: rgba(255,68,68,0.08);
+}
+.delete-card-badge {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 9px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--red); background: rgba(255,68,68,0.12);
+  border-radius: 3px; padding: 2px 7px; display: inline-block;
+  margin-bottom: 7px;
+}
+.event-title-delete {
+  font-family: 'Syne', sans-serif; font-weight: 600; font-size: 14px;
+  color: var(--text); text-decoration: line-through;
+  text-decoration-color: var(--red); opacity: 0.8;
+}
+.delete-scope-row {
+  display: flex; gap: 6px; margin-top: 10px;
+}
+.delete-scope-btn {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 10px;
+  letter-spacing: 0.07em; text-transform: uppercase;
+  background: transparent; border: 1px solid var(--border2);
+  border-radius: var(--r); padding: 5px 10px;
+  color: var(--muted); cursor: pointer; transition: all 0.15s;
+}
+.delete-scope-btn:hover { border-color: var(--red); color: var(--red); }
+.delete-scope-btn.active { background: rgba(255,68,68,0.12); border-color: var(--red); color: var(--red); }
 
 /* ── REVISE AREA ── */
 .revise-area {
