@@ -23,9 +23,7 @@ window.onload = () => {
   });
 
   loadTodos();
-  renderTodos();
   loadProposedEvents();
-  if (proposedEvents.length) renderProposals();
 
   const savedKey = localStorage.getItem('scheduler_anth_key');
   if (savedKey) config.apiKey = savedKey;
@@ -45,6 +43,8 @@ function showApp() {
   document.documentElement.setAttribute('data-authed', '1');
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('app-screen').style.display   = 'flex';
+  renderTodos();
+  if (proposedEvents.length) renderProposals();
   initGoogleAuth();
   // Fetch Anthropic key from server if we don't have it cached
   if (!config.apiKey) {
