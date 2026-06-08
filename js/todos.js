@@ -551,8 +551,9 @@ ${todoList}
 Your job: analyze the user's input and split it into:
 1. "calendar" items — concrete events to ADD with a specific or implied time/date ("dentist Friday", "gym tomorrow morning", "meeting at 3pm")
 2. "todos" items — fuzzy tasks with no committed time ("buy groceries", "email professor", "finish chapter 4", "pack bag")
-3. "delete" items — requests to REMOVE existing calendar events. Match against the existing calendar list above by title similarity. Return the event id of each matched event.
+3. "delete" items — requests to REMOVE/CANCEL/DELETE existing calendar events. Words like "remove", "delete", "cancel", "take off", "get rid of" targeting an existing event → delete. Match against the existing calendar list above by title similarity (fuzzy match is fine). Return the event id of each matched event.
 
+IMPORTANT: If the user says to remove/cancel/delete something that matches an existing event, it MUST go in "delete", never in "calendar". Do not add deletion requests as new calendar items.
 Some inputs may produce multiple types (e.g. "cancel dentist and add gym tomorrow and remind me to pack").
 If the user asks to schedule their todos, treat all pending todos as calendar items.
 For deletions: only include events you are confident the user wants deleted. If ambiguous, do not include.
