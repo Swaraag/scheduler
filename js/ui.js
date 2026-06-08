@@ -13,7 +13,7 @@ window.onload = () => {
   const savedTheme = localStorage.getItem('scheduler_theme');
   if (savedTheme) { try { applyTheme(JSON.parse(savedTheme), false); } catch {} }
 
-  if (window.innerWidth <= 600) currentView = 'threeday';
+  if (window.innerWidth <= 600) switchCalView('threeday');
 
   document.addEventListener('keydown', (e) => {
     if (!(e.metaKey || e.ctrlKey) || e.key !== 'Enter') return;
