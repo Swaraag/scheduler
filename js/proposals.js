@@ -338,12 +338,14 @@ function acceptProposal(i) {
   proposedEvents[i]._state = proposedEvents[i]._state === 'accepted' ? 'pending' : 'accepted';
   saveProposedEvents();
   renderProposals();
+  _refreshCalWithProposals();
 }
 
 function rejectProposal(i) {
   proposedEvents[i]._state = proposedEvents[i]._state === 'rejected' ? 'pending' : 'rejected';
   saveProposedEvents();
   renderProposals();
+  _refreshCalWithProposals();
 }
 
 function updateProposal(i, field, value) {
@@ -385,6 +387,7 @@ async function confirmEvents() {
   const COLOR_MAP = { tomato:'11',flamingo:'4',tangerine:'6',banana:'5',sage:'2',basil:'10',peacock:'7',blueberry:'9',lavender:'1',grape:'3',graphite:'8' };
 
   let added = 0, deleted = 0;
+  const deletedIds = new Set();
 
   // Handle deletions first
   for (const ev of toDelete) {
@@ -400,10 +403,13 @@ async function confirmEvents() {
       );
       if (!res.ok && res.status !== 204) throw new Error(await res.text());
       deleted++;
+      deletedIds.add(ev._existingId);
+      if (ev._recurringEventId) deletedIds.add(ev._recurringEventId);
     } catch (e) { console.error('Failed to delete:', ev.title, e); }
   }
 
   // Handle additions
+  const addedGcalEvents = [];
   for (const ev of toAdd) {
     try {
       const body = {
@@ -424,13 +430,32 @@ async function confirmEvents() {
         body
       );
       if (!res.ok) throw new Error(await res.text());
+      const created = await res.json();
+      addedGcalEvents.push({ ...created, _calId: targetCal });
       added++;
       _markMatchingTodoScheduled(ev.title);
     } catch (e) { console.error('Failed to add:', ev.title, e); }
   }
 
+  // Optimistically update calEvents7 so the view reflects changes immediately
+  // without racing against GCal's eventual consistency on re-fetch
+  if (deletedIds.size) {
+    calEvents7 = calEvents7.filter(e => !deletedIds.has(e.id));
+    if (calEventsYear) calEventsYear = calEventsYear.filter(e => !deletedIds.has(e.id));
+  }
+  if (addedGcalEvents.length) {
+    const now7end = Date.now() + 7 * 86_400_000;
+    const within7 = addedGcalEvents.filter(e => {
+      const t = new Date(e.start?.dateTime || e.start?.date).getTime();
+      return t >= Date.now() && t <= now7end;
+    });
+    calEvents7 = [...calEvents7, ...within7].sort((a, b) =>
+      (a.start.dateTime || a.start.date).localeCompare(b.start.dateTime || b.start.date));
+    if (calEventsYear) calEventsYear = [...calEventsYear, ...addedGcalEvents].sort((a, b) =>
+      (a.start.dateTime || a.start.date).localeCompare(b.start.dateTime || b.start.date));
+  }
+
   setLoading(false);
-  await fetchEvents7();
   resetUI();
   localStorage.removeItem('scheduler_proposals');
 

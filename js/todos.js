@@ -595,14 +595,16 @@ No prose, no markdown, no code fences.`;
 
     if (!res.ok) { const err = await res.json(); throw new Error(err.error?.message || 'API error'); }
     const data = await res.json();
-    const raw  = extractJsonArray(data.content?.[0]?.text?.trim() || '');
 
     // extractJsonArray returns array — we need the object directly
     let routed;
     try {
       const rawText = data.content?.[0]?.text?.trim() || '';
+      console.log('[route] calContext:', calContext);
+      console.log('[route] raw response:', rawText);
       const cleaned = rawText.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/g,'').trim();
       routed = JSON.parse(cleaned);
+      console.log('[route] parsed:', routed);
     } catch {
       // Fallback: treat everything as a calendar item
       routed = { calendar: [text], todos: [] };
