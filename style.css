@@ -1136,6 +1136,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
     /* Detach from normal flow, become a fixed bottom sheet */
     position: fixed !important;
     left: 0; right: 0; bottom: 0;
+    padding-bottom: env(safe-area-inset-bottom);
     /* Start off-screen below the viewport */
     top: auto !important;
     z-index: 150;

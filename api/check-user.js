@@ -1,8 +1,7 @@
 // POST /api/check-user
 // Body: { email }
-// Checks if the email is in the ALLOWED_EMAILS env var (comma-separated).
-// If yes, returns { allowed: true } and the client proceeds to sign in.
-// If no, the client shows the request-access form without ever hitting Google.
+// Checks if the email is in the BLOCKED_EMAILS env var (comma-separated).
+// Everyone is allowed by default; blocked emails are turned away silently.
 
 export default function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -13,15 +12,11 @@ export default function handler(req, res) {
   const { email } = req.body || {};
   if (!email) { res.status(400).json({ error: 'Email required' }); return; }
 
-  const allowed = (process.env.ALLOWED_EMAILS || '')
+  const blocked = (process.env.BLOCKED_EMAILS || '')
     .split(',')
     .map(e => e.trim().toLowerCase())
     .filter(Boolean);
 
-  // Owner is always allowed
-  const ownerEmail = (process.env.OWNER_EMAIL || '').toLowerCase();
-  if (ownerEmail) allowed.push(ownerEmail);
-
-  const isAllowed = allowed.includes(email.trim().toLowerCase());
-  res.status(200).json({ allowed: isAllowed });
+  const isBlocked = blocked.includes(email.trim().toLowerCase());
+  res.status(200).json({ allowed: !isBlocked });
 }
